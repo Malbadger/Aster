@@ -16,6 +16,7 @@ function client(): IpcClient {
         case "daemon_probe_capabilities": return { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "LAW Core", state: "ready", optional: false, detail: "Ready" }] };
         case "model_list_catalog": return { models: [{ id: "ollama:qwen", displayName: "Qwen:latest", provider: "ollama", locality: "local", availability: "available", effort: { supported: ["low", "medium", "high"] }, capabilities: { tools: true, vision: false } }], favorites: [], recent: [] };
         case "task_list": return { tasks: [] };
+        case "provider_list_connections": return { connections: [] };
         default: throw new Error(`unexpected test operation ${op.name}`);
       }
     },
@@ -41,6 +42,7 @@ describe("App", () => {
         daemon_probe_capabilities: { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "LAW Core", state: "ready", optional: false, detail: "Ready" }] },
         model_list_catalog: { models: [], favorites: [], recent: [] },
         task_list: { tasks: [] },
+        provider_list_connections: { connections: [] },
       };
       return { protocol: 1, id, op, schemaVersion, ok: true, result: results[op] };
     });

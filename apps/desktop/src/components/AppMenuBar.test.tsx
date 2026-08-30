@@ -5,7 +5,8 @@ import { AppMenuBar } from "./AppMenuBar.js";
 function renderMenu(overrides: Partial<React.ComponentProps<typeof AppMenuBar>> = {}) {
   const props: React.ComponentProps<typeof AppMenuBar> = {
     hasFile: false, dirty: false, onNewChat: vi.fn(), onNewFile: vi.fn(), onOpenFile: vi.fn(),
-    onOpenFolder: vi.fn(), onSave: vi.fn(), onSaveAs: vi.fn(), onTogglePanel: vi.fn(), onResetLayout: vi.fn(), ...overrides,
+    onOpenFolder: vi.fn(), onSave: vi.fn(), onSaveAs: vi.fn(), onTogglePanel: vi.fn(), onResetLayout: vi.fn(),
+    onOpenSettings: vi.fn(), onOpenTerminal: vi.fn(), ...overrides,
   };
   render(<AppMenuBar {...props} />); return props;
 }
@@ -24,5 +25,14 @@ describe("AppMenuBar", () => {
     renderMenu({ hasFile: true, dirty: true });
     fireEvent.click(screen.getByText("File"));
     expect(screen.getByRole("menuitem", { name: /^Save Ctrl/ })).toBeEnabled();
+  });
+
+  it("dismisses an open menu when the pointer leaves it", () => {
+    renderMenu();
+    fireEvent.click(screen.getByText("View"));
+    const menu = screen.getByText("View").closest("details");
+    expect(menu).toHaveAttribute("open");
+    fireEvent.mouseLeave(menu!);
+    expect(menu).not.toHaveAttribute("open");
   });
 });

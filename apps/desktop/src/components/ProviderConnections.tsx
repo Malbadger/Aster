@@ -23,6 +23,7 @@ export interface ProviderConnectionsProps {
   onRemove: (connectionId: string) => void;
   onSetEnabled: (connectionId: string, enabled: boolean) => void;
   onCheck: (connectionId: string) => void;
+  onLogin?: (provider: string) => void;
 }
 
 const AUTH_METHODS: { value: AuthMethod; label: string }[] = [
@@ -40,6 +41,13 @@ const STATUS_LABEL: Record<ProviderConnection["status"], string> = {
   error: "Error",
 };
 
+const PROVIDER_PRESETS = [
+  { id: "claude-pro", name: "Claude", detail: "Anthropic account", method: "oauth-device" as const, reference: "" },
+  { id: "chatgpt", name: "ChatGPT", detail: "OpenAI account", method: "oauth-device" as const, reference: "" },
+  { id: "gemini", name: "Gemini", detail: "Google account or API key", method: "env-var" as const, reference: "GEMINI_API_KEY" },
+  { id: "ollama", name: "Ollama", detail: "Local models", method: "none-local" as const, reference: "" },
+];
+
 export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.Element {
   const [form, setForm] = React.useState<AddConnectionForm>({
     provider: "",
@@ -51,11 +59,22 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
   const needsRef = form.authMethod === "env-var" || form.authMethod === "external-command" || form.authMethod === "enterprise-broker";
 
   return (
-    <section aria-label="Provider connections" style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
+    <section aria-label="Provider connections" className="provider-settings">
       <h1 style={{ fontSize: 18 }}>Providers</h1>
       <p style={{ color: "var(--law-color-text-muted)", marginTop: 0 }}>
         Connections show status only. LAW never stores or displays credential values.
       </p>
+
+      <div className="provider-presets" aria-label="Provider quick setup">
+        {PROVIDER_PRESETS.map((preset) => <article key={preset.id}>
+          <span><strong>{preset.name}</strong><small>{preset.detail}</small></span>
+          <button type="button" onClick={() => {
+            const next = { provider: preset.id, label: preset.name, authMethod: preset.method, locality: preset.id === "ollama" ? "local" as const : "remote" as const, reference: preset.reference };
+            setForm(next);
+            if (preset.method === "oauth-device") { props.onAdd(next); props.onLogin?.(preset.id); }
+          }}>{preset.method === "oauth-device" ? "Sign in" : "Configure"}</button>
+        </article>)}
+      </div>
 
       {props.state === "loading" && <p style={{ color: "var(--law-color-text-muted)" }}>Loading…</p>}
       {props.state === "error" && (
@@ -93,7 +112,7 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
           e.preventDefault();
           props.onAdd({ ...form, reference: needsRef ? form.reference : undefined });
         }}
-        style={{ display: "grid", gap: 6, marginTop: 12, borderTop: "1px solid var(--law-color-border)", paddingTop: 12 }}
+        className="provider-form"
       >
         <input aria-label="Provider" placeholder="Provider (e.g. ollama)" value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} style={field()} />
         <input aria-label="Label" placeholder="Label" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} style={field()} />

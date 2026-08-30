@@ -8,16 +8,28 @@ export interface WorkspaceShellProps {
   onToggle: (panel: Panel) => void;
   onPreset: (preset: Preset) => void;
   onReset: () => void;
+  onSettings?: () => void;
 }
 
-const RAIL: Array<{ panel: Panel; glyph: string; label: string }> = [
-  { panel: "fileTree", glyph: "◇", label: "Explorer" },
-  { panel: "taskHistory", glyph: "◷", label: "Task history" },
-  { panel: "chat", glyph: "◌", label: "Chat" },
-  { panel: "editor", glyph: "⌘", label: "Editor" },
+const RAIL: Array<{ panel: Panel; icon: "files" | "history" | "chat" | "code"; label: string }> = [
+  { panel: "fileTree", icon: "files", label: "Explorer" },
+  { panel: "taskHistory", icon: "history", label: "Task history" },
+  { panel: "chat", icon: "chat", label: "Chat" },
+  { panel: "editor", icon: "code", label: "Editor" },
 ];
 const BOTTOM: Panel[] = ["terminal", "problems", "output"];
 const LABEL: Record<Panel, string> = { chat: "Chat", editor: "Editor", fileTree: "Explorer", taskHistory: "Tasks", terminal: "Terminal", problems: "Problems", output: "Output" };
+
+function RailIcon({ name }: { name: "files" | "history" | "chat" | "code" | "settings" }): React.JSX.Element {
+  const paths = {
+    files: <><path d="M4 3h6l2 2h8v15H4z" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
+    history: <><path d="M4 5v5h5" /><path d="M5.5 9a7 7 0 1 1 .5 7" /><path d="M12 8v5l3 2" /></>,
+    chat: <><path d="M4 4h16v12H9l-5 4z" /><path d="M8 9h8M8 12h5" /></>,
+    code: <><path d="m9 6-5 6 5 6M15 6l5 6-5 6M13 4l-2 16" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M19 13.5v-3l-2-.7-.6-1.4.9-1.9-2.1-2.1-1.9.9-1.4-.6-.7-2H9l-.7 2-1.4.6-1.9-.9-2.1 2.1.9 1.9-.6 1.4-2 .7v3l2 .7.6 1.4-.9 1.9L5 21.6l1.9-.9 1.4.6.7 2h3l.7-2 1.4-.6 1.9.9 2.1-2.1-.9-1.9.6-1.4z" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 /** Desktop workbench: activity rail + optional sidebar + primary surface + dock. */
 export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
@@ -29,12 +41,12 @@ export function WorkspaceShell(props: WorkspaceShellProps): React.JSX.Element {
 
   return <div className="workbench">
     <nav className="activity-rail" aria-label="Primary navigation">
-      {RAIL.map(({ panel, glyph, label }) => <button key={panel} type="button" className={props.layout[panel] ? "rail-button active" : "rail-button"}
+      {RAIL.map(({ panel, icon, label }) => <button key={panel} type="button" className={props.layout[panel] ? "rail-button active" : "rail-button"}
         aria-label={label} aria-pressed={props.layout[panel]} onClick={() => props.onToggle(panel)}>
-        <span aria-hidden>{glyph}</span><small>{label}</small>
+        <RailIcon name={icon} /><small>{label}</small>
       </button>)}
       <span className="rail-spacer" />
-      <button type="button" className="rail-button" aria-label="Settings"><span aria-hidden>⚙</span><small>Settings</small></button>
+      <button type="button" className="rail-button" aria-label="Settings" onClick={props.onSettings}><RailIcon name="settings" /><small>Settings</small></button>
     </nav>
 
     {sidebarVisible && sidebarPanel && <aside className="workbench-sidebar" aria-label={LABEL[sidebarPanel]}>
