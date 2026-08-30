@@ -69,6 +69,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
         <div className="composer-row">
           <textarea
             aria-label="Message"
+            autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

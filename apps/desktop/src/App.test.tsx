@@ -24,14 +24,14 @@ function client(): IpcClient {
 }
 
 describe("App", () => {
-  it("boots through the typed client and renders an accessible start surface", async () => {
+  it("boots through the typed client directly into the accessible chat workspace", async () => {
     const { container } = render(<App client={client()} />);
     expect(screen.getByLabelText("LAW")).toBeInTheDocument();
     expect(screen.getByTestId("app-version")).toHaveTextContent(DESKTOP_VERSION);
-    await screen.findByRole("heading", { name: "Start" });
+    await screen.findByRole("textbox", { name: "Message" });
     const result = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(result.violations).toEqual([]);
-    await waitFor(() => expect(screen.getByRole("button", { name: /^New Chat/ })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus());
   });
 
   it("keeps the default native client stable across boot state updates", async () => {
@@ -47,7 +47,7 @@ describe("App", () => {
       return { protocol: 1, id, op, schemaVersion, ok: true, result: results[op] };
     });
     render(<App />);
-    await screen.findByRole("heading", { name: "Start" });
+    await screen.findByRole("textbox", { name: "Message" });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(invoke.mock.calls.filter(([, args]) => args.request.op === "daemon_get_health")).toHaveLength(1);
   });
