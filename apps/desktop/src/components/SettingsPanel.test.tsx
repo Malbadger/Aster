@@ -11,8 +11,8 @@ const base = {
 describe("SettingsPanel", () => {
   it("selects a persisted color theme intent", () => {
     const onTheme = vi.fn(); render(<SettingsPanel {...base} onTheme={onTheme} />);
-    fireEvent.click(screen.getByRole("button", { name: /Midnight/ }));
-    expect(onTheme).toHaveBeenCalledWith("midnight");
+    fireEvent.click(screen.getByRole("button", { name: /Catppuccin Mocha/ }));
+    expect(onTheme).toHaveBeenCalledWith("catppuccin-mocha");
   });
 
   it("navigates to provider connections", () => {

@@ -58,7 +58,7 @@ describe("Orchestrator", () => {
     expect(kinds).toContain("assistant");
     expect(kinds).toContain("tool_call");
     expect(kinds).toContain("tool_result");
-    expect(taskStatus).toBe("active");
+    expect(taskStatus).toBe("completed");
     const phase = orch.getTask(task.taskId).phases[0]!;
     expect(phase.status).toBe("completed");
     expect(phase.identity).toEqual(IDENTITY);

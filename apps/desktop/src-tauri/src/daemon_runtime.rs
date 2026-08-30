@@ -62,13 +62,12 @@ pub fn start(app: &AppHandle) -> Result<(), String> {
     let (node, entry, root) = packaged_paths(app).map_or_else(development_paths, Ok)?;
     let handshake = handshake_path();
     let _ = std::fs::remove_file(&handshake);
-    let mut child = Command::new(&node)
-        .arg(&entry)
-        .current_dir(&root)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    let data_dir = app.path().app_data_dir().map_err(|error| format!("cannot determine LAW data directory: {error}"))?;
+    std::fs::create_dir_all(&data_dir).map_err(|error| format!("cannot create LAW data directory: {error}"))?;
+    let mut command = Command::new(&node);
+    command.arg(&entry).current_dir(&root).env("LAW_DATA_DIR", &data_dir)
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    let mut child = command.spawn()
         .map_err(|error| format!("cannot start LAW local service with {}: {error}", node.display()))?;
     if let Err(error) = wait_for_handshake(&mut child, &handshake) {
         let _ = child.kill();

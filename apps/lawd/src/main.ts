@@ -32,18 +32,19 @@ import { join } from "node:path";
 
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
+  const dataRoot = process.env.LAW_DATA_DIR ?? lawRoot;
   const catalog = new CatalogService(
     new LawCoreModelSource(lawRoot),
-    FilePreferencesStore.forRoot(lawRoot),
+    FilePreferencesStore.forRoot(dataRoot),
   );
   const providers = new ProviderService({
-    store: FileConnectionStore.forRoot(lawRoot),
+    store: FileConnectionStore.forRoot(dataRoot),
     broker: new CredentialBroker({ runner: new SpawnCommandRunner() }),
     // Local-first default: offline, no remote egress until a visible action grants it.
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
   });
   const orchestrator = new Orchestrator({
-    store: FileTaskStore.forRoot(lawRoot),
+    store: FileTaskStore.forRoot(dataRoot),
     runner: new LawCorePhaseRunner(lawRoot),
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
     workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : lawRoot),
@@ -54,8 +55,8 @@ async function main(): Promise<void> {
   const logging = new LoggingService({
     sink: {
       write: (line) => {
-        mkdirSync(join(lawRoot, ".law", "logs"), { recursive: true });
-        appendFileSync(join(lawRoot, ".law", "logs", "law.jsonl"), `${line}\n`, { mode: 0o600 });
+        mkdirSync(join(dataRoot, ".law", "logs"), { recursive: true });
+        appendFileSync(join(dataRoot, ".law", "logs", "law.jsonl"), `${line}\n`, { mode: 0o600 });
       },
     },
   });

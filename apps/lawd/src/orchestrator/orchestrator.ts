@@ -154,6 +154,7 @@ export class Orchestrator {
       status: "running",
       startedAt: this.now().toISOString(),
     };
+    if (task.status !== "active") this.deps.store.updateTask({ ...task, status: "active", updatedAt: this.now().toISOString() });
     this.deps.store.addPhase(phase);
     this.append(task.taskId, {
       kind: "status",
@@ -214,13 +215,14 @@ export class Orchestrator {
       data: { status },
     });
 
-    // Task stays active for more turns; hard-terminal outcomes update task status.
+    // A completed turn settles the task for UI polling. A later message moves
+    // it back to active before starting its next phase.
     if (status === "cancelled" || status === "error") {
       const t = this.deps.store.getTask(task.taskId);
       if (t) this.deps.store.updateTask({ ...t, status: status === "cancelled" ? "cancelled" : "error", updatedAt: this.now().toISOString() });
     } else {
       const t = this.deps.store.getTask(task.taskId);
-      if (t) this.deps.store.updateTask({ ...t, updatedAt: this.now().toISOString() });
+      if (t) this.deps.store.updateTask({ ...t, status: "completed", updatedAt: this.now().toISOString() });
     }
     this.running.delete(task.taskId);
   }

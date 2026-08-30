@@ -178,16 +178,24 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   async function send(text: string): Promise<void> {
     setError(undefined);
-    let targetTaskId = taskId;
-    if (!targetTaskId) {
-      const label = workspaceRoot ? workspaceRoot.split("/").filter(Boolean).at(-1) ?? workspaceRoot : "New chat";
-      const created = await client.call(task_create, { title: label, ...(workspaceRoot ? { workspaceId: workspaceRoot } : {}), defaultIdentity: identityFor(selected, effort) });
-      targetTaskId = created.task.taskId;
-      setTaskId(targetTaskId);
+    const optimistic: ChatEvent = { id: `local-${Date.now()}`, taskId: taskId ?? "pending", seq: events.length, at: new Date().toISOString(), kind: "user", text };
+    setEvents((current) => [...current, optimistic]);
+    try {
+      let targetTaskId = taskId;
+      if (!targetTaskId) {
+        const label = workspaceRoot ? workspaceRoot.split("/").filter(Boolean).at(-1) ?? workspaceRoot : "New chat";
+        const created = await client.call(task_create, { title: label, ...(workspaceRoot ? { workspaceId: workspaceRoot } : {}), defaultIdentity: identityFor(selected, effort) });
+        targetTaskId = created.task.taskId;
+        setTaskId(targetTaskId);
+      }
+      const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort) });
+      setEvents((await client.call(task_get_events, { taskId: targetTaskId, sinceSeq: 0 })).events);
+      setRunning(result.status === "running"); await refreshTasks();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(message); setRunning(false);
+      setEvents((current) => [...current, { id: `local-error-${Date.now()}`, taskId: taskId ?? "pending", seq: current.length, at: new Date().toISOString(), kind: "error", text: `Message was not sent: ${message}` }]);
     }
-    const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort) });
-    setEvents((await client.call(task_get_events, { taskId: targetTaskId, sinceSeq: 0 })).events);
-    setRunning(result.status === "running"); await refreshTasks();
   }
 
   async function stop(): Promise<void> {
