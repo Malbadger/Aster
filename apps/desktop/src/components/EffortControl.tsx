@@ -16,7 +16,8 @@ export interface EffortControlProps {
 export function EffortControl(props: EffortControlProps): React.JSX.Element {
   const supportedSet = new Set(props.supported);
   return (
-    <div role="group" aria-label="Reasoning effort" style={{ display: "flex", gap: 2 }}>
+    <div className="effort-slider" role="group" aria-label="Reasoning effort">
+      <span className="effort-track" aria-hidden />
       {EFFORT_LEVELS.map((level) => {
         const enabled = supportedSet.has(level);
         const selected = props.value === level;
@@ -29,22 +30,10 @@ export function EffortControl(props: EffortControlProps): React.JSX.Element {
             disabled={!enabled}
             title={enabled ? `Effort: ${level}` : `"${level}" is not supported by this model (refused, not ignored)`}
             onClick={() => enabled && props.onChange(level)}
-            style={{
-              minHeight: 32,
-              minWidth: 24,
-              padding: "4px 8px",
-              fontSize: 12,
-              textTransform: "capitalize",
-              color: selected ? "var(--law-color-on-accent)" : "var(--law-color-text)",
-              background: selected ? "var(--law-color-accent)" : "var(--law-color-bg-input)",
-              border: `1px solid ${selected ? "var(--law-color-accent)" : "var(--law-color-border)"}`,
-              borderRadius: 5,
-              cursor: enabled ? "pointer" : "not-allowed",
-              opacity: enabled ? 1 : 0.45,
-              textDecoration: enabled ? "none" : "line-through",
-            }}
+            className={`${selected ? "selected " : ""}${enabled ? "enabled" : "unsupported"}`}
           >
-            {level}
+            <span aria-hidden />
+            <small>{level}</small>
           </button>
         );
       })}

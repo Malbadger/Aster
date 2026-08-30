@@ -16,7 +16,8 @@ import { tauriTransport } from "./ipc/tauri-transport.js";
 import { ChatPanel } from "./components/ChatPanel.js";
 import { AppMenuBar } from "./components/AppMenuBar.js";
 import { CodeEditor } from "./components/CodeEditor.js";
-import { SettingsPanel, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
+import { EmbeddedTerminal } from "./components/EmbeddedTerminal.js";
+import { SettingsPanel, type EditorEngine, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
 import type { AddConnectionForm } from "./components/ProviderConnections.js";
 import { EffortControl } from "./components/EffortControl.js";
 import { FlatModelSelector } from "./components/FlatModelSelector.js";
@@ -30,6 +31,7 @@ type View = "boot" | "setup" | "start" | "workspace";
 export interface AppProps { client?: IpcClient }
 const LAYOUT_KEY = "law.desktop.layout.v2";
 const THEME_KEY = "law.desktop.theme.v1";
+const EDITOR_KEY = "law.desktop.editor.v1";
 const defaultClient = createIpcClient(tauriTransport);
 
 function loadLayout(): Layout {
@@ -68,6 +70,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [verification, setVerification] = React.useState("unverified");
   const [settingsTab, setSettingsTab] = React.useState<SettingsTab>();
   const [theme, setTheme] = React.useState<LawTheme>(() => (localStorage.getItem(THEME_KEY) as LawTheme | null) ?? "graphite");
+  const [editorEngine, setEditorEngine] = React.useState<EditorEngine>(() => (localStorage.getItem(EDITOR_KEY) as EditorEngine | null) ?? "builtin");
+  const [terminalLaunch, setTerminalLaunch] = React.useState<{ program: "neovim"; filePath: string }>();
   const [connections, setConnections] = React.useState<ProviderConnection[]>([]);
   const [providerState, setProviderState] = React.useState<"empty" | "loading" | "error" | "ready">("loading");
   const [providerError, setProviderError] = React.useState<string>();
@@ -114,6 +118,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   React.useEffect(() => { void boot(); }, [boot]);
   React.useEffect(() => { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }, [layout]);
   React.useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(THEME_KEY, theme); }, [theme]);
+  React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
 
   React.useEffect(() => {
     if (!taskId || !running) return;
@@ -163,7 +168,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         await client.call(workspace_set_root, { path: root }); setWorkspaceRoot(root); newChat();
         const file = await client.call(fs_read_file, { path: chosen });
         setOpenFile(chosen); setFileContent(file.content); setSavedContent(file.content); setVerification(file.state.verification);
-        setLayout((old) => ({ ...old, editor: true, chat: true })); setActivePanel("editor");
+        setLayout((old) => ({ ...old, chat: true })); await openInEditor(editorEngine, chosen);
       }
       return;
     }
@@ -198,6 +203,24 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     setSavedContent(fileContent); setVerification(result.state.verification);
   }
 
+  async function openInEditor(engine: EditorEngine, path: string): Promise<void> {
+    setEditorEngine(engine);
+    if (engine === "builtin") {
+      setTerminalLaunch(undefined); setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor"); return;
+    }
+    if (engine === "neovim") {
+      setTerminalLaunch({ program: "neovim", filePath: path });
+      setLayout((old) => ({ ...old, editor: false, terminal: true, problems: false, output: false })); setActivePanel("terminal"); return;
+    }
+    try {
+      await invoke("editor_open", { engine, filePath: path });
+      setLayout((old) => ({ ...old, editor: false }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setEditorEngine("builtin"); setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor");
+    }
+  }
+
   async function saveFileAs(): Promise<void> {
     if (!openFile) return;
     const chosen = await saveNativePath({ title: "Save file as", defaultPath: openFile });
@@ -215,7 +238,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     await client.call(workspace_set_root, { path: root });
     await client.call(fs_write_file, { path: chosen, content: "", author: "human" });
     setWorkspaceRoot(root); setOpenFile(chosen); setFileContent(""); setSavedContent(""); setVerification("unverified");
-    setLayout((old) => ({ ...old, editor: true, chat: true })); setActivePanel("editor");
+    setLayout((old) => ({ ...old, chat: true })); await openInEditor(editorEngine, chosen);
     if (!taskId) newChat();
   }
 
@@ -268,16 +291,17 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
     chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} />,
-    editor: openFile ? <EditorPanel path={openFile} content={fileContent} dirty={fileContent !== savedContent} verification={verification} onChange={(value) => { setFileContent(value); if (value !== savedContent && verification === "pass") setVerification("stale"); }} onSave={() => void saveFile()} onVerify={() => void verifyFile()} onClose={() => setLayout((old) => ({ ...old, editor: false }))} /> : undefined,
-    fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => setActivePanel("editor")}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
+    editor: openFile ? <EditorPanel path={openFile} content={fileContent} dirty={fileContent !== savedContent} verification={verification} engine={editorEngine} onEngine={(engine) => void openInEditor(engine, openFile)} onChange={(value) => { setFileContent(value); if (value !== savedContent && verification === "pass") setVerification("stale"); }} onSave={() => void saveFile()} onVerify={() => void verifyFile()} onClose={() => setLayout((old) => ({ ...old, editor: false }))} /> : undefined,
+    fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
-    terminal: <EmptyPanel title="Terminal" detail="Open an attended system terminal in this workspace." action="Open terminal" onAction={() => void openSystemTerminal()} />,
+    terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,
     problems: <EmptyPanel title="Problems" detail="Diagnostics for the active file appear here." />,
     output: <EmptyPanel title="Output" detail="Checks, tool output, and process status appear here." />,
   };
 
   const toggleSurface = (panel: Panel) => {
     if (panel === "editor" && !openFile) { void startAction("open-file"); return; }
+    if (panel === "terminal") setTerminalLaunch(undefined);
     setActivePanel(panel);
     setLayout((old) => {
       if (panel === "fileTree" || panel === "taskHistory") {
@@ -298,6 +322,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       if (key === "n") { event.preventDefault(); if (event.shiftKey) newChat(); else void newFile(); }
       if (key === "o" && !event.shiftKey) { event.preventDefault(); void startAction("open-file"); }
       if (key === "s") { event.preventDefault(); void (event.shiftKey ? saveFileAs() : saveFile()); }
+      if (event.key === "`") { event.preventDefault(); toggleSurface("terminal"); }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -319,8 +344,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
       {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} onSettings={() => setSettingsTab("appearance")} /></main>}
     </div>
-    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} connections={connections} providerState={providerState} providerError={providerError}
-      onTab={setSettingsTab} onTheme={setTheme} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
+    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError}
+      onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
       onCheckConnection={(id) => void checkConnection(id)} onLoginProvider={(provider) => void loginProvider(provider)} />}
   </div>;
@@ -330,9 +355,9 @@ function EmptyPanel({ title, detail, action, onAction }: { title: string; detail
   return <div className="empty-panel"><span className="empty-kicker">{title}</span><p>{detail}</p>{action && <button type="button" onClick={onAction}>{action}</button>}</div>;
 }
 
-function EditorPanel(props: { path: string; content: string; dirty: boolean; verification: string; onChange: (value: string) => void; onSave: () => void; onVerify: () => void; onClose: () => void }): React.JSX.Element {
+function EditorPanel(props: { path: string; content: string; dirty: boolean; verification: string; engine: EditorEngine; onEngine: (engine: EditorEngine) => void; onChange: (value: string) => void; onSave: () => void; onVerify: () => void; onClose: () => void }): React.JSX.Element {
   return <section className="editor-panel" aria-label="Editor">
-    <header><code>{props.path}</code><span>{props.dirty ? "Modified" : "Saved"}</span><span>Checks: {props.verification}</span><button type="button" disabled={!props.dirty} onClick={props.onSave}>Save</button><button type="button" disabled={props.dirty} onClick={props.onVerify}>Run checks</button><button type="button" aria-label="Close editor" onClick={props.onClose}>×</button></header>
+    <header><code>{props.path}</code><select aria-label="Open with" value={props.engine} onChange={(event) => props.onEngine(event.target.value as EditorEngine)}><option value="builtin">LAW Editor</option><option value="neovim">Neovim</option><option value="vscode-oss">VS Code OSS</option></select><span>{props.dirty ? "Modified" : "Saved"}</span><span>Checks: {props.verification}</span><button type="button" disabled={!props.dirty} onClick={props.onSave}>Save</button><button type="button" disabled={props.dirty} onClick={props.onVerify}>Run checks</button><button type="button" aria-label="Close editor" onClick={props.onClose}>×</button></header>
     <div className="editor-breadcrumbs">{props.path.split("/").filter(Boolean).slice(-4).map((part, index, parts) => <React.Fragment key={`${part}-${index}`}><span>{part}</span>{index < parts.length - 1 && <i>›</i>}</React.Fragment>)}</div>
     <CodeEditor path={props.path} value={props.content} onChange={props.onChange} />
   </section>;

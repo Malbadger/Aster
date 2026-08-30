@@ -4,6 +4,7 @@ import { ProviderConnections, type AddConnectionForm } from "./ProviderConnectio
 
 export type LawTheme = "graphite" | "light" | "midnight" | "high-contrast";
 export type SettingsTab = "appearance" | "providers" | "general";
+export type EditorEngine = "builtin" | "neovim" | "vscode-oss";
 
 export interface SettingsPanelProps {
   tab: SettingsTab;
@@ -13,6 +14,8 @@ export interface SettingsPanelProps {
   providerError?: string;
   onTab: (tab: SettingsTab) => void;
   onTheme: (theme: LawTheme) => void;
+  editorEngine: EditorEngine;
+  onEditorEngine: (engine: EditorEngine) => void;
   onClose: () => void;
   onAddConnection: (form: AddConnectionForm) => void;
   onRemoveConnection: (id: string) => void;
@@ -44,7 +47,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
           </div></section>}
           {props.tab === "providers" && <ProviderConnections connections={props.connections} state={props.providerState} errorMessage={props.providerError}
             onAdd={props.onAddConnection} onRemove={props.onRemoveConnection} onSetEnabled={props.onSetConnectionEnabled} onCheck={props.onCheckConnection} onLogin={props.onLoginProvider} />}
-          {props.tab === "general" && <section><h2>General</h2><div className="settings-row"><div><strong>Restore workspace layout</strong><p>LAW remembers open sidebars and bottom panels on this device.</p></div><span>Enabled</span></div><div className="settings-row"><div><strong>Offline-first model discovery</strong><p>Local endpoints remain available without a network connection.</p></div><span>Enabled</span></div></section>}
+          {props.tab === "general" && <section><h2>General</h2><div className="settings-row"><div><strong>Open files with</strong><p>Choose LAW's built-in editor, embedded Neovim, or an installed open-source VS Code build.</p></div><select aria-label="Default editor" value={props.editorEngine} onChange={(event) => props.onEditorEngine(event.target.value as EditorEngine)}><option value="builtin">LAW Editor</option><option value="neovim">Neovim (embedded)</option><option value="vscode-oss">VSCodium / VS Code OSS</option></select></div><div className="settings-row"><div><strong>Restore workspace layout</strong><p>LAW remembers open sidebars and bottom panels on this device.</p></div><span>Enabled</span></div><div className="settings-row"><div><strong>Offline-first model discovery</strong><p>Local endpoints remain available without a network connection.</p></div><span>Enabled</span></div></section>}
         </main>
       </div>
     </section>

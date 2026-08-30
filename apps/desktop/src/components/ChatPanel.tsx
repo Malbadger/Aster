@@ -79,8 +79,8 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
               }
             }}
             rows={3}
+            className="chat-composer-input"
             placeholder="Message or /command…"
-            style={{ flex: 1, resize: "vertical", minHeight: 40, padding: 8, borderRadius: 5, border: "1px solid var(--law-color-border)", background: "var(--law-color-bg-input)", color: "var(--law-color-text)", fontFamily: "inherit" }}
           />
           {props.running ? (
             <button type="button" onClick={props.onStop} style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-danger)", background: "transparent", color: "var(--law-color-danger)", cursor: "pointer" }}>Stop</button>
