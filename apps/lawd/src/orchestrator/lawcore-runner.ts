@@ -1,0 +1,96 @@
+/**
+ * Real phase runner: binds to LAW Core's PiAdapter. Opens a bounded session with
+ * the phase's tools and the daemon's policy gate as the pre-execution
+ * interceptor, submits the prompt, and maps LAW Core's provider-neutral
+ * `LawEvent`s to `PhaseEvent`s. Abort aborts the session. Executes where LAW Core
+ * `dist/` exists (Ubuntu); deterministic tests use a scripted runner instead.
+ */
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
+
+// Minimal shapes of the LAW Core boundary we rely on (kept local to avoid a
+// build-time dependency on LAW Core types).
+interface LawEventLike {
+  kind: string;
+  text?: string;
+  tool?: string;
+  input?: unknown;
+  callId?: string;
+  ok?: boolean;
+  summary?: string;
+  reason?: string;
+  message?: string;
+  output?: number;
+}
+
+interface PiSessionLike {
+  submit(prompt: string): AsyncIterable<Record<string, unknown>>;
+  abort(): Promise<void>;
+  dispose(): Promise<void>;
+}
+interface PiAdapterLike {
+  openSession(spec: unknown): Promise<PiSessionLike>;
+}
+
+export class LawCorePhaseRunner implements PhaseRunner {
+  constructor(private readonly lawRoot: string) {}
+
+  async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
+    const mod = (await import(pathToFileURL(join(this.lawRoot, "dist", "pi-adapter", "index.js")).href)) as {
+      createPiAdapter: () => PiAdapterLike;
+    };
+    const adapter = mod.createPiAdapter();
+
+    // LAW Core interceptor shape: (call) => { decision: 'allow'|'deny', reason }.
+    const interceptor = (call: { tool: string; input: unknown; callId: string }) => {
+      const d = req.gate({ tool: call.tool, input: call.input, callId: call.callId });
+      return { decision: d.allow ? "allow" : "deny", reason: d.reason };
+    };
+
+    const session = await adapter.openSession({
+      profile: { id: req.identity.model, provider: req.identity.provider, modelPolicy: { allow: [], deny: [] }, locality: "any", authKind: "none" },
+      requestedModel: req.identity.model,
+      tools: req.tools,
+      interceptor,
+      workspaceRoot: req.workspaceRoot,
+      allowMutation: req.allowMutation,
+    });
+
+    const onAbort = () => void session.abort().catch(() => {});
+    req.signal.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      for await (const raw of session.submit(req.prompt)) {
+        const e = raw as unknown as LawEventLike;
+        const mapped = mapEvent(e);
+        if (mapped) yield mapped;
+        if (req.signal.aborted) break;
+      }
+    } finally {
+      req.signal.removeEventListener("abort", onAbort);
+      await session.dispose().catch(() => {});
+    }
+  }
+}
+
+function mapEvent(e: LawEventLike): PhaseEvent | undefined {
+  switch (e.kind) {
+    case "assistant_message":
+      return { kind: "assistant", text: String(e.text ?? "") };
+    case "tool_call":
+      return { kind: "tool_call", tool: String(e.tool ?? ""), input: e.input, callId: String(e.callId ?? "") };
+    case "tool_result":
+      return { kind: "tool_result", tool: String(e.tool ?? ""), ok: Boolean(e.ok), summary: String(e.summary ?? ""), callId: String(e.callId ?? "") };
+    case "tool_denied":
+      return { kind: "tool_denied", tool: String(e.tool ?? ""), reason: String(e.reason ?? ""), callId: String(e.callId ?? "") };
+    case "usage":
+      return { kind: "usage", input: Number(e.input ?? 0), output: Number(e.output ?? 0) };
+    case "agent_settled":
+      return { kind: "settled" };
+    case "error":
+      return { kind: "error", message: String(e.message ?? "error") };
+    default:
+      return undefined;
+  }
+}

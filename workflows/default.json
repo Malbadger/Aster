@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "default",
+  "version": "1.0",
+  "entry": "agent_work",
+  "nodes": [
+    {
+      "name": "agent_work",
+      "kind": "bounded-pi-session",
+      "maxIterations": 8,
+      "resultKey": "agentResult"
+    }
+  ]
+}

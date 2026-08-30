@@ -1,0 +1,26 @@
+{
+  "name": "@law/lawd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LAW local daemon — owns providers, tools, shell, Git, files, policy, evidence, credentials. The UI never bypasses it.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "lawd": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@law/contracts": "0.1.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "5.9.2",
+    "vitest": "^3.2.6"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LAW",
+  "version": "0.1.0",
+  "identifier": "org.law.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5183",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "LAW",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'",
+      "devCsp": "default-src 'self' http://localhost:5183; connect-src 'self' ws://localhost:5183 http://localhost:5183; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5183",
+      "capabilities": ["default"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "resources": { "../../../packaging/runtime/": "runtime/" },
+    "category": "DeveloperTool",
+    "shortDescription": "Local Agent Workbench",
+    "longDescription": "LAW is a Linux-first open-source desktop workbench for local and remote AI models, optional coding, provider-neutral orchestration, verification, and evidence.",
+    "linux": {
+      "deb": { "depends": [] }
+    }
+  }
+}

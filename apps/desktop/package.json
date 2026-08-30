@@ -1,0 +1,36 @@
+{
+  "name": "@law/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LAW desktop shell — Tauri 2 + React/TypeScript. Presentation and input only; all effects go through lawd.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@law/contracts": "0.1.0",
+    "@tanstack/react-query": "^5.62.0",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "axe-core": "^4.13.0",
+    "jsdom": "^25.0.1",
+    "typescript": "5.9.2",
+    "vite": "^8.2.2",
+    "vitest": "^3.2.6"
+  }
+}

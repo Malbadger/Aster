@@ -1,0 +1,64 @@
+{
+  "name": "law-pi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LAW for Pi — Local Agent Workbench: LAW Core plus the Linux-first LAW desktop application.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <25"
+  },
+  "workspaces": [
+    "packages/contracts",
+    "packages/ui",
+    "packages/test-fixtures",
+    "apps/lawd",
+    "apps/desktop"
+  ],
+  "bin": {
+    "law": "dist/cli/index.js",
+    "law-mcp": "dist/mcp/server.js"
+  },
+  "files": [
+    "dist",
+    "workflows",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/say.mjs BUILD PASS",
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/test.mjs",
+    "law": "node dist/cli/index.js",
+    "mcp": "node dist/mcp/server.js",
+    "benchmark": "node dist/cli/index.js benchmark --provider ollama --cases required",
+    "package": "node scripts/package.mjs",
+    "uat": "node scripts/uat.mjs",
+    "prepare-dev": "tsc -p tsconfig.json",
+    "build:all": "node scripts/desktop/build-all.mjs",
+    "check:all": "node scripts/desktop/check-all.mjs",
+    "desktop:dev": "npm --workspace apps/desktop run dev",
+    "desktop:daemon": "npm --workspace apps/lawd run start",
+    "desktop:test": "node scripts/desktop/test-all.mjs",
+    "desktop:package": "node scripts/desktop/package.mjs",
+    "desktop:smoke:packaged": "node scripts/desktop/smoke-packaged.mjs",
+    "desktop:exemplars": "node scripts/desktop/exemplars.mjs",
+    "desktop:a11y": "node scripts/desktop/a11y.mjs",
+    "desktop:uat": "node scripts/desktop/uat.mjs",
+    "release:audit": "node scripts/desktop/release-audit.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "^22.20.1",
+    "@vitejs/plugin-react": "^6.1.1",
+    "axe-core": "^4.13.0",
+    "tsx": "^4.23.12",
+    "typescript": "5.9.2",
+    "vite": "^8.2.2",
+    "vitest": "^3.2.6"
+  }
+}

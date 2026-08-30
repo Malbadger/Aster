@@ -1,0 +1,36 @@
+node_modules/
+dist/
+work/dist/
+work/upgrades/
+work/runs/
+work/independent-audit/
+work/evidence/exports/
+work/evidence/uat/
+work/evidence/
+.law/
+*.tgz
+*.bundle
+
+# Private development methodology and local acceptance material
+/00-PROJECT-INDEX.md
+/01-PROJECT-TRUTH.md
+/02-FUNCTIONAL-CONTRACT.md
+/03-INTERACTION-DECISIONS.md
+/04-BUILD-RECORD.md
+/05-AUDIT-AND-ACCEPTANCE.md
+/AUDIT-PROMPT.md
+/EXEMPLAR-PROMPTS.md
+/KICKOFF-PROMPT.md
+/benchmarks/
+/docs/build-kit/
+/docs/product-build-kit/
+/prompts/
+
+# LAW desktop build outputs
+target/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+packaging/runtime/
+*.tsbuildinfo
+*.AppImage
+*.deb
