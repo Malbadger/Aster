@@ -19,7 +19,8 @@ function only(...visible: Panel[]): Layout {
   return base;
 }
 
-export const DEFAULT_LAYOUT: Layout = only("chat", "editor", "fileTree");
+// Chat is the calm default. Supporting surfaces appear only when requested.
+export const DEFAULT_LAYOUT: Layout = only("chat");
 
 export function applyPreset(name: Preset, activePanel: Panel = "chat"): Layout {
   switch (name) {

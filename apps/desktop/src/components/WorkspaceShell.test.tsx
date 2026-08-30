@@ -19,19 +19,16 @@ describe("WorkspaceShell", () => {
       />,
     );
     expect(screen.getByText("chat-content")).toBeInTheDocument();
-    // Terminal is collapsed by default; the rail button exists.
-    fireEvent.click(screen.getByRole("button", { name: "Toggle Terminal" }));
-    expect(onToggle).toHaveBeenCalledWith("terminal");
+    fireEvent.click(screen.getByRole("button", { name: "Explorer" }));
+    expect(onToggle).toHaveBeenCalledWith("fileTree");
   });
 
-  it("offers layout presets and reset", () => {
-    const onPreset = vi.fn();
-    const onReset = vi.fn();
-    render(<WorkspaceShell layout={DEFAULT_LAYOUT} activePanel="chat" slots={{}} onToggle={() => {}} onPreset={onPreset} onReset={onReset} />);
-    fireEvent.change(screen.getByLabelText("Layout preset"), { target: { value: "Full Workspace" } });
-    expect(onPreset).toHaveBeenCalledWith("Full Workspace");
-    fireEvent.click(screen.getByRole("button", { name: "Reset layout" }));
-    expect(onReset).toHaveBeenCalled();
+  it("docks terminal below the primary workspace", () => {
+    const onToggle = vi.fn();
+    render(<WorkspaceShell layout={{ ...DEFAULT_LAYOUT, terminal: true }} activePanel="terminal" slots={{ terminal: <div>terminal-content</div> }} onToggle={onToggle} onPreset={() => {}} onReset={() => {}} />);
+    expect(screen.getByText("terminal-content")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close bottom panel" }));
+    expect(onToggle).toHaveBeenCalledWith("terminal");
   });
 });
 

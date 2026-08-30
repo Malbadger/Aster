@@ -1,5 +1,5 @@
 import React from "react";
-import { open as openNativePath } from "@tauri-apps/plugin-dialog";
+import { open as openNativePath, save as saveNativePath } from "@tauri-apps/plugin-dialog";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
   model_list_catalog, model_set_favorite, task_cancel, task_create,
@@ -12,6 +12,7 @@ import {
 import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
 import { ChatPanel } from "./components/ChatPanel.js";
+import { AppMenuBar } from "./components/AppMenuBar.js";
 import { EffortControl } from "./components/EffortControl.js";
 import { FlatModelSelector } from "./components/FlatModelSelector.js";
 import { FirstRunSetup } from "./components/FirstRunSetup.js";
@@ -22,7 +23,7 @@ import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, typ
 
 type View = "boot" | "setup" | "start" | "workspace";
 export interface AppProps { client?: IpcClient }
-const LAYOUT_KEY = "law.desktop.layout.v1";
+const LAYOUT_KEY = "law.desktop.layout.v2";
 const defaultClient = createIpcClient(tauriTransport);
 
 function loadLayout(): Layout {
@@ -134,6 +135,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         await client.call(workspace_set_root, { path: root }); setWorkspaceRoot(root); await newChat(root);
         const file = await client.call(fs_read_file, { path: chosen });
         setOpenFile(chosen); setFileContent(file.content); setSavedContent(file.content); setVerification(file.state.verification);
+        setLayout((old) => ({ ...old, editor: true, chat: true })); setActivePanel("editor");
       }
       return;
     }
@@ -162,6 +164,26 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     setSavedContent(fileContent); setVerification(result.state.verification);
   }
 
+  async function saveFileAs(): Promise<void> {
+    if (!openFile) return;
+    const chosen = await saveNativePath({ title: "Save file as", defaultPath: openFile });
+    if (typeof chosen !== "string") return;
+    const result = await client.call(fs_write_file, { path: chosen, content: fileContent, author: "human" });
+    setOpenFile(chosen); setSavedContent(fileContent); setVerification(result.state.verification);
+    setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor");
+  }
+
+  async function newFile(): Promise<void> {
+    const chosen = await saveNativePath({ title: "Create a new file", defaultPath: workspaceRoot ? `${workspaceRoot}/untitled.txt` : "untitled.txt" });
+    if (typeof chosen !== "string") return;
+    const root = chosen.slice(0, Math.max(1, chosen.lastIndexOf("/")));
+    await client.call(workspace_set_root, { path: root });
+    await client.call(fs_write_file, { path: chosen, content: "", author: "human" });
+    setWorkspaceRoot(root); setOpenFile(chosen); setFileContent(""); setSavedContent(""); setVerification("unverified");
+    setLayout((old) => ({ ...old, editor: true, chat: true })); setActivePanel("editor");
+    if (!taskId) await newChat(root);
+  }
+
   async function verifyFile(): Promise<void> {
     if (!openFile) return;
     const result = await client.call(verify_run, { path: openFile });
@@ -184,7 +206,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
     chat: <ChatPanel events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} />,
-    editor: openFile ? <EditorPanel path={openFile} content={fileContent} dirty={fileContent !== savedContent} verification={verification} onChange={(value) => { setFileContent(value); if (value !== savedContent && verification === "pass") setVerification("stale"); }} onSave={() => void saveFile()} onVerify={() => void verifyFile()} /> : <EmptyPanel title="Editor" detail="Open a file to begin editing. Changes remain local until you explicitly publish them." action="Open file" onAction={() => void startAction("open-file")} />,
+    editor: openFile ? <EditorPanel path={openFile} content={fileContent} dirty={fileContent !== savedContent} verification={verification} onChange={(value) => { setFileContent(value); if (value !== savedContent && verification === "pass") setVerification("stale"); }} onSave={() => void saveFile()} onVerify={() => void verifyFile()} onClose={() => setLayout((old) => ({ ...old, editor: false }))} /> : undefined,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => setActivePanel("editor")}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
     terminal: <EmptyPanel title="Terminal" detail="Terminal sessions run through the daemon policy boundary." action="New terminal" />,
@@ -192,18 +214,48 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     output: <EmptyPanel title="Output" detail="Checks, tool output, and process status appear here." />,
   };
 
+  const toggleSurface = (panel: Panel) => {
+    if (panel === "editor" && !openFile) { void startAction("open-file"); return; }
+    setActivePanel(panel);
+    setLayout((old) => {
+      if (panel === "fileTree" || panel === "taskHistory") {
+        return { ...old, fileTree: panel === "fileTree" ? !old.fileTree : false, taskHistory: panel === "taskHistory" ? !old.taskHistory : false };
+      }
+      if (panel === "terminal" || panel === "problems" || panel === "output") {
+        const opening = !old[panel];
+        return { ...old, terminal: panel === "terminal" && opening, problems: panel === "problems" && opening, output: panel === "output" && opening };
+      }
+      return togglePanel(old, panel);
+    });
+  };
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "n") { event.preventDefault(); void (event.shiftKey ? newChat() : newFile()); }
+      if (key === "o" && !event.shiftKey) { event.preventDefault(); void startAction("open-file"); }
+      if (key === "s") { event.preventDefault(); void (event.shiftKey ? saveFileAs() : saveFile()); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   return <div className="law-app" aria-label="LAW">
     <header className="titlebar">
       <button className="brand" type="button" onClick={() => setView("start")} aria-label="LAW home"><span className="brand-mark">L</span><strong>LAW</strong></button>
       <div className="workspace-identity"><span>{view === "workspace" ? tasks.find((task) => task.taskId === taskId)?.title ?? "Workspace" : "Local Agent Workbench"}</span><small>{running ? "Working" : workspaceRoot ?? "Ready"}</small></div>
-      <div className="runtime-state"><span className={running ? "pulse active" : "pulse"} aria-hidden />{running ? "Task active" : "Local runtime"}<small data-testid="app-version">v{DESKTOP_VERSION}</small></div>
+      <div className="runtime-state"><small data-testid="app-version">v{DESKTOP_VERSION}</small></div>
     </header>
+    <AppMenuBar hasFile={Boolean(openFile)} dirty={fileContent !== savedContent} onNewChat={() => void newChat()} onNewFile={() => void newFile()}
+      onOpenFile={() => void startAction("open-file")} onOpenFolder={() => void startAction("open-folder")} onSave={() => void saveFile()} onSaveAs={() => void saveFileAs()}
+      onTogglePanel={toggleSurface} onResetLayout={() => setLayout(resetLayout())} />
     {error && <div className="error-banner" role="alert"><span>{error}</span><button type="button" onClick={() => setError(undefined)}>Dismiss</button></div>}
     <div className="app-body">
       {view === "boot" && <main className="center-stage"><div className="boot-card"><span className="pulse active" aria-hidden /><h1>{error ? "LAW cannot reach its local service" : "Starting LAW"}</h1><p>{error ?? bootDetail}</p>{error && <button className="primary" type="button" onClick={() => void boot()}>Retry connection</button>}</div></main>}
       {view === "setup" && probe && <main className="center-stage"><FirstRunSetup probe={probe} onContinue={() => setView("start")} onRetry={() => void boot()} /></main>}
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
-      {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={(panel) => { setActivePanel(panel); setLayout((old) => togglePanel(old, panel)); }} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} /></main>}
+      {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} /></main>}
     </div>
   </div>;
 }
@@ -212,9 +264,9 @@ function EmptyPanel({ title, detail, action, onAction }: { title: string; detail
   return <div className="empty-panel"><span className="empty-kicker">{title}</span><p>{detail}</p>{action && <button type="button" onClick={onAction}>{action}</button>}</div>;
 }
 
-function EditorPanel(props: { path: string; content: string; dirty: boolean; verification: string; onChange: (value: string) => void; onSave: () => void; onVerify: () => void }): React.JSX.Element {
+function EditorPanel(props: { path: string; content: string; dirty: boolean; verification: string; onChange: (value: string) => void; onSave: () => void; onVerify: () => void; onClose: () => void }): React.JSX.Element {
   return <section className="editor-panel" aria-label="Editor">
-    <header><code>{props.path}</code><span>{props.dirty ? "Modified" : "Saved"}</span><span>Checks: {props.verification}</span><button type="button" disabled={!props.dirty} onClick={props.onSave}>Save</button><button type="button" disabled={props.dirty} onClick={props.onVerify}>Run checks</button></header>
+    <header><code>{props.path}</code><span>{props.dirty ? "Modified" : "Saved"}</span><span>Checks: {props.verification}</span><button type="button" disabled={!props.dirty} onClick={props.onSave}>Save</button><button type="button" disabled={props.dirty} onClick={props.onVerify}>Run checks</button><button type="button" aria-label="Close editor" onClick={props.onClose}>×</button></header>
     <textarea aria-label={`Editing ${props.path}`} spellCheck={false} value={props.content} onChange={(event) => props.onChange(event.target.value)} />
   </section>;
 }

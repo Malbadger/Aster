@@ -34,6 +34,7 @@ function eventColor(kind: ChatEvent["kind"]): string {
 
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
+  const visibleEvents = props.events.filter((event) => event.kind !== "status");
   const submit = () => {
     const t = text.trim();
     if (!t || props.running) return;
@@ -42,13 +43,14 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   };
 
   return (
-    <section aria-label="Chat" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <ol aria-label="Conversation" style={{ listStyle: "none", margin: 0, padding: 12, overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-        {props.events.length === 0 && (
-          <li style={{ color: "var(--law-color-text-muted)" }}>Start by describing a task, or type /help for commands.</li>
+    <section aria-label="Chat" className="chat-panel">
+      <header className="pane-title"><strong>Chat</strong><span>Ask, build, review</span></header>
+      <ol aria-label="Conversation" className="conversation">
+        {visibleEvents.length === 0 && (
+          <li className="chat-welcome"><strong>What are we building?</strong><span>Describe a task, open a project, or type /help.</span></li>
         )}
-        {props.events.map((e) => (
-          <li key={e.id} data-kind={e.kind} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {visibleEvents.map((e) => (
+          <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
             {e.kind !== "user" && e.kind !== "assistant" && (
               <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: eventColor(e.kind) }}>
                 {KIND_LABEL[e.kind] ?? e.kind}
@@ -59,11 +61,12 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
             </span>
           </li>
         ))}
+        {props.running && <li className="processing" aria-live="polite"><span className="agent-current" aria-hidden><i /><i /><i /></span><span>Thinking</span></li>}
       </ol>
 
-      <div style={{ borderTop: "1px solid var(--law-color-border)", padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div className="composer-wrap">
         {props.controls && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{props.controls}</div>}
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+        <div className="composer-row">
           <textarea
             aria-label="Message"
             value={text}
@@ -74,7 +77,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
                 submit();
               }
             }}
-            rows={2}
+            rows={3}
             placeholder="Message or /command…"
             style={{ flex: 1, resize: "vertical", minHeight: 40, padding: 8, borderRadius: 5, border: "1px solid var(--law-color-border)", background: "var(--law-color-bg-input)", color: "var(--law-color-text)", fontFamily: "inherit" }}
           />

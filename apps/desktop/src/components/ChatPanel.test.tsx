@@ -32,5 +32,11 @@ describe("ChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(onStop).toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByText("Thinking")).toBeInTheDocument();
+  });
+
+  it("keeps low-level status events out of the conversation", () => {
+    render(<ChatPanel events={[{ id: "s", taskId: "t", seq: 0, at: "", kind: "status", text: "Phase completed." }]} running={false} onSend={() => {}} onStop={() => {}} />);
+    expect(screen.queryByText("Phase completed.")).toBeNull();
   });
 });
