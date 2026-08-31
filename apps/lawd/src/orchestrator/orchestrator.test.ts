@@ -54,7 +54,7 @@ describe("Orchestrator", () => {
     const { events, taskStatus } = orch.getEvents(task.taskId, 0);
     const kinds = events.map((e) => e.kind);
     expect(kinds).toContain("user");
-    expect(kinds).toContain("plan");
+    expect(kinds).not.toContain("plan");
     expect(kinds).toContain("assistant");
     expect(kinds).toContain("tool_call");
     expect(kinds).toContain("tool_result");

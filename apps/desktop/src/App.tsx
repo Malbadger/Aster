@@ -15,11 +15,10 @@ import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
 import { ChatPanel } from "./components/ChatPanel.js";
 import { AppMenuBar } from "./components/AppMenuBar.js";
-import { CodeEditor } from "./components/CodeEditor.js";
 import { EmbeddedTerminal } from "./components/EmbeddedTerminal.js";
+import { VscodiumEditor } from "./components/VscodiumEditor.js";
 import { SettingsPanel, type EditorEngine, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
 import type { AddConnectionForm } from "./components/ProviderConnections.js";
-import { EffortControl } from "./components/EffortControl.js";
 import { FlatModelSelector } from "./components/FlatModelSelector.js";
 import { FirstRunSetup } from "./components/FirstRunSetup.js";
 import { StartSurface, type StartAction } from "./components/StartSurface.js";
@@ -70,8 +69,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [verification, setVerification] = React.useState("unverified");
   const [settingsTab, setSettingsTab] = React.useState<SettingsTab>();
   const [theme, setTheme] = React.useState<LawTheme>(() => (localStorage.getItem(THEME_KEY) as LawTheme | null) ?? "graphite");
-  const [editorEngine, setEditorEngine] = React.useState<EditorEngine>(() => (localStorage.getItem(EDITOR_KEY) as EditorEngine | null) ?? "builtin");
-  const [terminalLaunch, setTerminalLaunch] = React.useState<{ program: "neovim"; filePath: string }>();
+  const [editorEngine, setEditorEngine] = React.useState<EditorEngine>("vscode-oss");
+  const [terminalLaunch, setTerminalLaunch] = React.useState<{ program: "pi"; initialInput?: string }>();
   const [connections, setConnections] = React.useState<ProviderConnection[]>([]);
   const [providerState, setProviderState] = React.useState<"empty" | "loading" | "error" | "ready">("loading");
   const [providerError, setProviderError] = React.useState<string>();
@@ -177,6 +176,44 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   }
 
   async function send(text: string): Promise<void> {
+    const command = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());
+    if (command) {
+      const name = command[1]?.toLowerCase();
+      const args = command[2]?.trim() ?? "";
+      const local = (kind: "user" | "assistant" | "error", message: string) => setEvents((current) => [...current, {
+        id: `local-${kind}-${Date.now()}-${current.length}`, taskId: taskId ?? "local", seq: current.length,
+        at: new Date().toISOString(), kind, text: message,
+      }]);
+      if (name === "model") {
+        local("user", text);
+        if (!args) { setModelOpen(true); local("assistant", "Choose a model from the selector beside the chat box."); return; }
+        const needle = args.toLowerCase();
+        const match = models.find((model) => model.id.toLowerCase() === needle || model.displayName.toLowerCase() === needle || model.id.toLowerCase().endsWith(`:${needle}`));
+        if (!match) { setModelOpen(true); local("error", `No model matched “${args}”. Choose one from the model selector.`); return; }
+        setSelectedId(match.id); local("assistant", `Model selected: ${match.displayName} (${match.provider}).`); return;
+      }
+      if (name === "effort") {
+        local("user", text);
+        const requested = args.toLowerCase() as EffortLevel;
+        if (!selected) { local("error", "Select a model before setting effort."); return; }
+        if (!args) { local("assistant", `Current effort: ${effort}. Supported by ${selected.displayName}: ${selected.effort.supported.join(", ")}. Use /effort <level>.`); return; }
+        if (!selected.effort.supported.includes(requested)) { local("error", `${selected.displayName} does not support “${args}”. Available: ${selected.effort.supported.join(", ")}.`); return; }
+        setEffort(requested); local("assistant", `Effort set to ${requested} for ${selected.displayName}.`); return;
+      }
+      if (name === "clear") {
+        setEvents([]); return;
+      }
+      if (name === "login" || name === "logout" || name === "pi") {
+        local("user", text);
+        const provider = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args;
+        const initialInput = name === "login" || name === "logout" ? `/${name}${provider ? ` ${provider}` : ""}\n` : undefined;
+        setTerminalLaunch({ program: "pi", ...(initialInput ? { initialInput } : {}) });
+        setActivePanel("terminal");
+        setLayout((old) => ({ ...old, terminal: true, problems: false, output: false }));
+        local("assistant", name === "pi" ? "Opened the full Pi interface inside LAW." : `Opened Pi’s secure ${name} flow inside LAW. Credentials remain owned by Pi.`);
+        return;
+      }
+    }
     setError(undefined);
     const optimistic: ChatEvent = { id: `local-${Date.now()}`, taskId: taskId ?? "pending", seq: events.length, at: new Date().toISOString(), kind: "user", text };
     setEvents((current) => [...current, optimistic]);
@@ -213,20 +250,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   async function openInEditor(engine: EditorEngine, path: string): Promise<void> {
     setEditorEngine(engine);
-    if (engine === "builtin") {
-      setTerminalLaunch(undefined); setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor"); return;
-    }
-    if (engine === "neovim") {
-      setTerminalLaunch({ program: "neovim", filePath: path });
-      setLayout((old) => ({ ...old, editor: false, terminal: true, problems: false, output: false })); setActivePanel("terminal"); return;
-    }
-    try {
-      await invoke("editor_open", { engine, filePath: path });
-      setLayout((old) => ({ ...old, editor: false }));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setEditorEngine("builtin"); setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor");
-    }
+    setOpenFile(path); setLayout((old) => ({ ...old, editor: true })); setActivePanel("editor");
   }
 
   async function saveFileAs(): Promise<void> {
@@ -293,13 +317,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         onSelect={(id) => { setSelectedId(id); setModelOpen(false); }}
         onToggleFavorite={(modelId, favorite) => void client.call(model_set_favorite, { modelId, favorite }).then((result) => setFavorites(result.favorites))} /></div>}
     </div>
-    <span className="effort-label">Effort</span>
-    <EffortControl value={effort} supported={selected?.effort.supported ?? []} onChange={setEffort} />
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
     chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} />,
-    editor: openFile ? <EditorPanel path={openFile} content={fileContent} dirty={fileContent !== savedContent} verification={verification} engine={editorEngine} onEngine={(engine) => void openInEditor(engine, openFile)} onChange={(value) => { setFileContent(value); if (value !== savedContent && verification === "pass") setVerification("stale"); }} onSave={() => void saveFile()} onVerify={() => void verifyFile()} onClose={() => setLayout((old) => ({ ...old, editor: false }))} /> : undefined,
+    editor: openFile ? <VscodiumEditor directory={workspaceRoot ?? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/")))} /> : undefined,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,
@@ -361,12 +383,4 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
 function EmptyPanel({ title, detail, action, onAction }: { title: string; detail: string; action?: string; onAction?: () => void }): React.JSX.Element {
   return <div className="empty-panel"><span className="empty-kicker">{title}</span><p>{detail}</p>{action && <button type="button" onClick={onAction}>{action}</button>}</div>;
-}
-
-function EditorPanel(props: { path: string; content: string; dirty: boolean; verification: string; engine: EditorEngine; onEngine: (engine: EditorEngine) => void; onChange: (value: string) => void; onSave: () => void; onVerify: () => void; onClose: () => void }): React.JSX.Element {
-  return <section className="editor-panel" aria-label="Editor">
-    <header><code>{props.path}</code><select aria-label="Open with" value={props.engine} onChange={(event) => props.onEngine(event.target.value as EditorEngine)}><option value="builtin">LAW Editor</option><option value="neovim">Neovim</option><option value="vscode-oss">VS Code OSS</option></select><span>{props.dirty ? "Modified" : "Saved"}</span><span>Checks: {props.verification}</span><button type="button" disabled={!props.dirty} onClick={props.onSave}>Save</button><button type="button" disabled={props.dirty} onClick={props.onVerify}>Run checks</button><button type="button" aria-label="Close editor" onClick={props.onClose}>×</button></header>
-    <div className="editor-breadcrumbs">{props.path.split("/").filter(Boolean).slice(-4).map((part, index, parts) => <React.Fragment key={`${part}-${index}`}><span>{part}</span>{index < parts.length - 1 && <i>›</i>}</React.Fragment>)}</div>
-    <CodeEditor path={props.path} value={props.content} onChange={props.onChange} />
-  </section>;
 }

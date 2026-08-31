@@ -127,15 +127,13 @@ export class Orchestrator {
     }
 
     this.append(task.taskId, { kind: "user", taskId: task.taskId, text: input.text });
-    this.append(task.taskId, { kind: "plan", taskId: task.taskId, text: parsed.interpretation.summary, data: { interpretation: parsed.interpretation } });
-
     // Deterministic local commands (not phases).
     if (parsed.interpretation.type === "unknown-command") {
       this.append(task.taskId, { kind: "status", taskId: task.taskId, text: parsed.interpretation.summary });
       return { accepted: false, interpretation: parsed.interpretation, status: "pending", reason: "unknown command", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
     if (parsed.command === "help") {
-      this.append(task.taskId, { kind: "status", taskId: task.taskId, text: "Commands: /help, /plan, /run, /audit, /model, /clear. Plain text runs as a request." });
+      this.append(task.taskId, { kind: "assistant", taskId: task.taskId, text: "Commands: /model, /effort, /login, /logout, /pi, /help, /plan, /run, /audit, /clear. Plain text runs through Pi with the selected model." });
       return { accepted: true, interpretation: parsed.interpretation, status: "completed", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
 

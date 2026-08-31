@@ -13,11 +13,11 @@ use serde_json::Value;
 use serde::Serialize;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::{atomic::{AtomicU64, Ordering}, Mutex};
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
 
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -29,6 +29,19 @@ struct TerminalSession {
 
 #[derive(Default)]
 struct TerminalState(Mutex<HashMap<String, TerminalSession>>);
+
+struct VscodiumServer { child: std::process::Child, url: String }
+
+#[derive(Default)]
+struct VscodiumState(Mutex<Option<VscodiumServer>>);
+
+impl Drop for VscodiumState {
+    fn drop(&mut self) {
+        if let Ok(slot) = self.0.get_mut() {
+            if let Some(server) = slot.as_mut() { let _ = server.child.kill(); let _ = server.child.wait(); }
+        }
+    }
+}
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,12 +67,11 @@ fn home_directory() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, directory: Option<String>, cols: u16, rows: u16, program: Option<String>, file_path: Option<String>) -> Result<String, String> {
+fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, directory: Option<String>, cols: u16, rows: u16, program: Option<String>) -> Result<String, String> {
     let pair = native_pty_system().openpty(PtySize { rows: rows.max(2), cols: cols.max(2), pixel_width: 0, pixel_height: 0 })
         .map_err(|error| format!("Could not allocate terminal: {error}"))?;
-    let mut command = if program.as_deref() == Some("neovim") {
-        let path = file_path.filter(|value| Path::new(value).is_absolute()).ok_or_else(|| "Neovim requires an absolute file path".to_string())?;
-        let mut command = CommandBuilder::new("nvim"); command.arg("--"); command.arg(path); command
+    let mut command = if program.as_deref() == Some("pi") {
+        CommandBuilder::new("pi")
     } else {
         let shell = std::env::var("SHELL").ok().filter(|value| Path::new(value).is_absolute()).unwrap_or_else(|| "/bin/bash".into());
         CommandBuilder::new(shell)
@@ -96,6 +108,42 @@ fn editor_open(engine: String, file_path: String) -> Result<String, String> {
         if command.spawn().is_ok() { return Ok((*program).into()); }
     }
     Err("VSCodium or VS Code OSS is not installed or not available on PATH".into())
+}
+
+#[tauri::command]
+fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>) -> Result<String, String> {
+    let mut slot = state.0.lock().map_err(|_| "VSCodium state is unavailable".to_string())?;
+    if let Some(server) = slot.as_mut() {
+        if server.child.try_wait().map_err(|error| error.to_string())?.is_none() { return Ok(server.url.clone()); }
+    }
+    let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
+    std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
+    let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
+    let mut last_error = String::new();
+    for program in ["codium", "code-oss"] {
+        let mut command = Command::new(program);
+        command.args(["serve-web", "--host", "127.0.0.1", "--port", "0", "--without-connection-token", "--disable-telemetry", "--server-data-dir"])
+            .arg(&data_dir).arg("--default-folder").arg(&folder)
+            .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        sanitize_child_environment(&mut command);
+        match command.spawn() {
+            Ok(mut child) => {
+                let stdout = child.stdout.take().ok_or_else(|| "Could not read VSCodium startup output".to_string())?;
+                let (sender, receiver) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                        if let Some(url) = line.split_whitespace().find(|part| part.starts_with("http://127.0.0.1:")) { let _ = sender.send(url.to_string()); break; }
+                    }
+                });
+                match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
+                    Ok(url) => { *slot = Some(VscodiumServer { child, url: url.clone() }); return Ok(url); }
+                    Err(_) => { let _ = child.kill(); last_error = format!("{program} did not publish its local URL"); }
+                }
+            }
+            Err(error) => last_error = format!("{program}: {error}"),
+        }
+    }
+    Err(format!("Could not start embedded VSCodium: {last_error}"))
 }
 
 #[tauri::command]
@@ -228,13 +276,14 @@ fn provider_login(provider: String, directory: Option<String>) -> Result<String,
 pub fn run() {
     tauri::Builder::default()
         .manage(TerminalState::default())
+        .manage(VscodiumState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             daemon_runtime::start(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_terminal, provider_login, editor_open, terminal_start, terminal_write, terminal_resize, terminal_stop])
+        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
         .run(tauri::generate_context!())
         .expect("error while running LAW desktop");
 }

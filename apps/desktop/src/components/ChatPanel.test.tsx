@@ -5,7 +5,7 @@ import type { ChatEvent } from "@law/contracts";
 
 const events: ChatEvent[] = [
   { id: "e1", taskId: "t", seq: 0, at: "", kind: "user", text: "read a.ts" },
-  { id: "e2", taskId: "t", seq: 1, at: "", kind: "plan", text: "Interpreted as a natural-language request." },
+  { id: "e2", taskId: "t", seq: 1, at: "", kind: "assistant", text: "I’ll inspect it." },
   { id: "e3", taskId: "t", seq: 2, at: "", kind: "tool_denied", text: "tool not allowed" },
 ];
 

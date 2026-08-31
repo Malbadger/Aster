@@ -16,7 +16,7 @@ export interface ChatPanelProps {
 }
 
 const KIND_LABEL: Partial<Record<ChatEvent["kind"], string>> = {
-  plan: "Plan",
+  plan: "Thinking",
   tool_call: "Tool",
   tool_result: "Result",
   tool_denied: "Denied",

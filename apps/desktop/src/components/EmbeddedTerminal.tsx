@@ -6,7 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalOutput { sessionId: string; data: string }
 
-export function EmbeddedTerminal({ directory, launch }: { directory?: string; launch?: { program: "neovim"; filePath: string } }): React.JSX.Element {
+export function EmbeddedTerminal({ directory, launch }: { directory?: string; launch?: { program: "pi"; initialInput?: string } }): React.JSX.Element {
   const host = React.useRef<HTMLDivElement>(null);
   const [failure, setFailure] = React.useState<string>();
 
@@ -39,8 +39,9 @@ export function EmbeddedTerminal({ directory, launch }: { directory?: string; la
         const dataSubscription = terminal.onData((data) => { if (sessionId) void invoke("terminal_write", { sessionId, data }); });
         disconnect = () => { resize.disconnect(); dataSubscription.dispose(); };
         fit.fit();
-        sessionId = await invoke<string>("terminal_start", { directory, cols: terminal.cols, rows: terminal.rows, program: launch?.program, filePath: launch?.filePath });
+        sessionId = await invoke<string>("terminal_start", { directory, cols: terminal.cols, rows: terminal.rows, program: launch?.program });
         if (disposed) { await invoke("terminal_stop", { sessionId }); return; }
+        if (launch?.initialInput) await invoke("terminal_write", { sessionId, data: launch.initialInput });
         terminal.focus();
       } catch (cause) {
         if (!disposed) setFailure(cause instanceof Error ? cause.message : String(cause));
@@ -52,7 +53,7 @@ export function EmbeddedTerminal({ directory, launch }: { directory?: string; la
       if (sessionId) void invoke("terminal_stop", { sessionId });
       terminal?.dispose();
     };
-  }, [directory, launch?.program, launch?.filePath]);
+  }, [directory, launch?.program, launch?.initialInput]);
 
   return <section className="embedded-terminal" aria-label="Terminal session">
     {failure && <div className="terminal-error" role="alert">Terminal could not start: {failure}</div>}

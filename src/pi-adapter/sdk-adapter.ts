@@ -185,7 +185,10 @@ export class PiSdkAdapter implements PiAdapter {
 
 /** The model pattern LAW asks Pi to resolve. Uses profile allowlist first entry, else provider default. */
 function modelPatternOf(spec: SessionSpec): string {
-  if (spec.requestedModel) return spec.requestedModel;
+  if (spec.requestedModel) {
+    const prefix = `${spec.profile.provider}:`;
+    return spec.requestedModel.startsWith(prefix) ? spec.requestedModel.slice(prefix.length) : spec.requestedModel;
+  }
   const allow = spec.profile.modelPolicy.allow;
   return allow.length > 0 ? (allow[0] as string) : '';
 }

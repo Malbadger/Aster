@@ -135,6 +135,8 @@ button:disabled { cursor: not-allowed; }
 .primary-grid.split { grid-template-columns: minmax(380px, .78fr) minmax(480px, 1.22fr); }
 .primary-pane { min-width: 0; min-height: 0; overflow: hidden; }
 .editor-pane { border-left: 1px solid var(--law-color-border); }
+.vscodium-frame { width: 100%; height: 100%; display: block; border: 0; background: var(--law-editor-bg); }
+.vscodium-loading { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--law-color-text-muted); background: var(--law-editor-bg); }
 .bottom-dock { height: clamp(180px, 28vh, 310px); min-height: 140px; resize: vertical; overflow: auto; border-top: 1px solid var(--law-color-border); background: var(--law-color-bg-panel); }
 .bottom-dock > header { height: 34px; display: flex; align-items: center; gap: 2px; padding: 0 8px; border-bottom: 1px solid var(--law-color-border); }
 .bottom-dock > header span { flex: 1; }
@@ -153,7 +155,7 @@ button:disabled { cursor: not-allowed; }
 .chat-welcome { margin: auto; display: flex; flex-direction: column; gap: 7px; text-align: center; color: var(--law-color-text-muted); }
 .chat-welcome strong { color: var(--law-color-text); font-size: 20px; font-weight: 560; }
 .chat-event { max-width: min(760px, 88%); display: flex; flex-direction: column; gap: 4px; line-height: 1.55; }
-.chat-event.user { align-self: flex-end; padding: 10px 13px; border: 1px solid var(--law-color-border); border-radius: 11px 11px 3px 11px; background: var(--law-color-bg-elevated); }
+.chat-event.user { align-self: flex-end; margin-right: clamp(18px, 4vw, 64px); padding: 10px 13px; border: 1px solid var(--law-color-border); border-radius: 11px 11px 3px 11px; background: var(--law-color-bg-elevated); }
 .composer-wrap { padding: 10px clamp(12px, 3vw, 34px) 14px; display: flex; flex-direction: column; gap: 7px; }
 .composer-row { display: flex; align-items: flex-end; gap: 7px; padding: 7px; border: 1px solid var(--law-color-border-strong); border-radius: 10px; background: var(--law-color-bg-input); box-shadow: 0 8px 28px rgba(0,0,0,.16); }
 .composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 42px; padding: 9px 10px; border: 0 !important; outline: 0; resize: none !important; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 14px/1.45 "Inter", "Segoe UI", system-ui, sans-serif; }
