@@ -66,6 +66,40 @@ fn home_directory() -> Result<String, String> {
     safe_directory(None).ok_or_else(|| "Could not determine the user home directory".into())
 }
 
+/// Open a provider-owned authentication page in the user's default browser.
+/// This deliberately accepts only ordinary HTTP(S) URLs; no file, shell, or
+/// custom schemes can cross the webview/native boundary.
+#[tauri::command]
+fn open_external_url(url: String) -> Result<String, String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) || url.contains(['\n', '\r', '\0']) {
+        return Err("Only HTTP(S) authentication URLs can be opened".into());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        for (program, args) in [("xdg-open", vec![url.as_str()]), ("gio", vec!["open", url.as_str()])] {
+            let mut command = Command::new(program); command.args(args); sanitize_child_environment(&mut command);
+            if command.spawn().is_ok() { return Ok(program.into()); }
+        }
+        return Err("No supported browser opener was found".into());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open"); command.arg(&url); sanitize_child_environment(&mut command);
+        command.spawn().map_err(|error| error.to_string())?; return Ok("open".into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = Command::new("cmd"); command.args(["/C", "start", "", &url]); sanitize_child_environment(&mut command);
+        command.spawn().map_err(|error| error.to_string())?; return Ok("default browser".into());
+    }
+
+    #[allow(unreachable_code)]
+    Err("Opening a browser is not supported on this platform".into())
+}
+
 fn bundled_pi_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
     let resources = app.path().resource_dir().ok()?;
     let node = resources.join("runtime/node");
@@ -294,7 +328,7 @@ pub fn run() {
             daemon_runtime::start(app.handle()).map_err(std::io::Error::other)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
+        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_external_url, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
         .run(tauri::generate_context!())
         .expect("error while running LAW desktop");
 }

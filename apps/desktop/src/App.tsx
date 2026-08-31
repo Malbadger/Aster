@@ -79,6 +79,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [authProviders, setAuthProviders] = React.useState<AuthProvider[]>([]);
   const [authFlow, setAuthFlow] = React.useState<AuthFlow>();
   const [authOpen, setAuthOpen] = React.useState(false);
+  const [authBrowserError, setAuthBrowserError] = React.useState<string>();
+  const openedAuthUrl = React.useRef<string>();
   const selected = models.find((model) => model.id === selectedId);
 
   const refreshCatalog = React.useCallback(async (search = "") => {
@@ -134,6 +136,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     const timer = window.setInterval(() => void client.call(provider_auth_get, { flowId: authFlow.flowId }).then((result) => setAuthFlow(result.flow)), 750);
     return () => window.clearInterval(timer);
   }, [authFlow?.flowId, authFlow?.status, client]);
+  React.useEffect(() => {
+    const url = authFlow?.messages.map((message) => message.url ?? message.verificationUri).filter(Boolean).at(-1);
+    const launchKey = authFlow ? `${authFlow.flowId}:${url}` : url;
+    if (!url || openedAuthUrl.current === launchKey) return;
+    openedAuthUrl.current = launchKey; setAuthBrowserError(undefined);
+    void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => {
+      setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}. Use Open browser to try again.`);
+    });
+  }, [authFlow?.messages]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
 
   React.useEffect(() => {
@@ -340,8 +351,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={authOpen ? <AuthCard providers={authProviders} flow={authFlow}
+    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
       onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
+      onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
     editor: openFile ? <VscodiumEditor directory={workspaceRoot ?? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/")))} /> : undefined,

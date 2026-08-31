@@ -52,12 +52,8 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
         )}
         {visibleEvents.map((e) => (
           <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
-            {e.kind !== "user" && e.kind !== "assistant" && (
-              <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", color: eventColor(e.kind) }}>
-                {KIND_LABEL[e.kind] ?? e.kind}
-              </span>
-            )}
-            <span style={{ color: e.kind === "user" ? "var(--law-color-text)" : "var(--law-color-text)", fontWeight: e.kind === "user" ? 600 : 400, whiteSpace: "pre-wrap" }}>
+            <span className="chat-event-mark" style={{ color: eventColor(e.kind) }} aria-hidden>{e.kind === "user" ? "›" : e.kind === "assistant" ? "LAW" : KIND_LABEL[e.kind] ?? e.kind}</span>
+            <span className="chat-event-copy">
               {e.text}
             </span>
           </li>
@@ -69,6 +65,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
       <div className="composer-wrap">
         {props.controls && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{props.controls}</div>}
         <div className="composer-row">
+          <span className="composer-prompt" aria-hidden>›</span>
           <textarea
             aria-label="Message"
             autoFocus
