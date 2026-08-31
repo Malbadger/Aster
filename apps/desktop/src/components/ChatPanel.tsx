@@ -13,6 +13,7 @@ export interface ChatPanelProps {
   onSend: (text: string) => void;
   onStop: () => void;
   controls?: React.ReactNode;
+  interactive?: React.ReactNode;
 }
 
 const KIND_LABEL: Partial<Record<ChatEvent["kind"], string>> = {
@@ -61,6 +62,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
             </span>
           </li>
         ))}
+        {props.interactive && <li className="chat-interactive">{props.interactive}</li>}
         {props.running && <li className="processing" aria-live="polite"><span className="agent-current" aria-hidden><i /><i /><i /></span><span>Thinking</span></li>}
       </ol>
 

@@ -29,6 +29,7 @@ import { DESKTOP_VERSION, DATA_SCHEMA_VERSION } from "@law/contracts";
 import { defaultPolicy } from "./ports.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
@@ -43,6 +44,8 @@ async function main(): Promise<void> {
     // Local-first default: offline, no remote egress until a visible action grants it.
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
   });
+  const authModule = await import(pathToFileURL(join(lawRoot, "dist", "pi-adapter", "index.js")).href) as { PiAuthBroker: new () => any };
+  const auth = new authModule.PiAuthBroker();
   const orchestrator = new Orchestrator({
     store: FileTaskStore.forRoot(dataRoot),
     runner: new LawCorePhaseRunner(lawRoot),
@@ -79,7 +82,7 @@ async function main(): Promise<void> {
     () => ["Windows/macOS deferred (OPEN-D-002)", "Packaging and UAT run on Ubuntu 24.04 (AS-D-001)", "Local models require a loopback endpoint (e.g. Ollama)"],
     () => ["final visual baseline", "live provider login/paid use", "license/trademark review", "release signing and publication"],
   );
-  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about });
+  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about });
   const info = await daemon.start();
 
   // Structured, secret-free startup line (token is NEVER logged).

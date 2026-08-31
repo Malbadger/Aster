@@ -28,6 +28,7 @@ import {
   provider_remove_connection,
   provider_set_enabled,
   provider_check_credential,
+  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   net_check_endpoint,
 } from "./provider.js";
 import {
@@ -66,6 +67,12 @@ export function createContractRegistry(): ContractRegistry {
   r.register(provider_remove_connection);
   r.register(provider_set_enabled);
   r.register(provider_check_credential);
+  r.register(provider_auth_methods);
+  r.register(provider_auth_start);
+  r.register(provider_auth_get);
+  r.register(provider_auth_respond);
+  r.register(provider_auth_cancel);
+  r.register(provider_auth_logout);
   r.register(net_check_endpoint);
   r.register(task_create);
   r.register(task_list);

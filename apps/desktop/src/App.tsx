@@ -8,8 +8,9 @@ import {
   fs_read_file, fs_write_file, verify_run,
   workspace_set_root,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
+  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   type CapabilityProbe, type ChatEvent, type EffortLevel,
-  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task,
+  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow,
 } from "@law/contracts";
 import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
@@ -24,6 +25,7 @@ import { FirstRunSetup } from "./components/FirstRunSetup.js";
 import { StartSurface, type StartAction } from "./components/StartSurface.js";
 import { TaskHistory } from "./components/TaskHistory.js";
 import { WorkspaceShell } from "./components/WorkspaceShell.js";
+import { AuthCard, type AuthProvider } from "./components/AuthCard.js";
 import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, type Panel, type Preset } from "./layout/layout.js";
 
 type View = "boot" | "setup" | "start" | "workspace";
@@ -74,6 +76,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [connections, setConnections] = React.useState<ProviderConnection[]>([]);
   const [providerState, setProviderState] = React.useState<"empty" | "loading" | "error" | "ready">("loading");
   const [providerError, setProviderError] = React.useState<string>();
+  const [authProviders, setAuthProviders] = React.useState<AuthProvider[]>([]);
+  const [authFlow, setAuthFlow] = React.useState<AuthFlow>();
+  const [authOpen, setAuthOpen] = React.useState(false);
   const selected = models.find((model) => model.id === selectedId);
 
   const refreshCatalog = React.useCallback(async (search = "") => {
@@ -117,6 +122,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   React.useEffect(() => { void boot(); }, [boot]);
   React.useEffect(() => { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }, [layout]);
   React.useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(THEME_KEY, theme); }, [theme]);
+  React.useEffect(() => {
+    if (!authFlow || !["running", "waiting"].includes(authFlow.status)) return;
+    const timer = window.setInterval(() => void client.call(provider_auth_get, { flowId: authFlow.flowId }).then((result) => setAuthFlow(result.flow)), 750);
+    return () => window.clearInterval(timer);
+  }, [authFlow?.flowId, authFlow?.status, client]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
 
   React.useEffect(() => {
@@ -203,16 +213,21 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       if (name === "clear") {
         setEvents([]); return;
       }
-      if (name === "login" || name === "logout" || name === "pi") {
+      if (name === "login") {
         local("user", text);
-        const provider = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args;
-        const initialInput = name === "login" || name === "logout" ? `/${name}${provider ? ` ${provider}` : ""}\n` : undefined;
-        setTerminalLaunch({ program: "pi", ...(initialInput ? { initialInput } : {}) });
-        setActivePanel("terminal");
-        setLayout((old) => ({ ...old, terminal: true, problems: false, output: false }));
-        local("assistant", name === "pi" ? "Opened the full Pi interface inside LAW." : `Opened Pi’s secure ${name} flow inside LAW. Credentials remain owned by Pi.`);
+        const result = await client.call(provider_auth_methods, {}); setAuthProviders(result.providers); setAuthOpen(true); setAuthFlow(undefined);
+        const requested = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args.toLowerCase();
+        const provider = requested && result.providers.find((item) => item.id === requested);
+        if (provider && provider.methods.length === 1) setAuthFlow((await client.call(provider_auth_start, { provider: provider.id, authType: provider.methods[0]! })).flow);
         return;
       }
+      if (name === "logout") {
+        local("user", text);
+        const provider = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args.toLowerCase();
+        if (!provider) { local("assistant", "Use /logout <provider>, for example /logout anthropic."); return; }
+        await client.call(provider_auth_logout, { provider }); local("assistant", `Logged out of ${provider}.`); await refreshCatalog(); return;
+      }
+      if (name === "pi") { local("user", text); local("assistant", "Pi is already the engine behind this chat. Use /model, /effort, /login, or enter your request here."); return; }
     }
     setError(undefined);
     const optimistic: ChatEvent = { id: `local-${Date.now()}`, taskId: taskId ?? "pending", seq: events.length, at: new Date().toISOString(), kind: "user", text };
@@ -320,7 +335,10 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} />,
+    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={authOpen ? <AuthCard providers={authProviders} flow={authFlow}
+      onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
+      onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
+      onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
     editor: openFile ? <VscodiumEditor directory={workspaceRoot ?? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/")))} /> : undefined,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,

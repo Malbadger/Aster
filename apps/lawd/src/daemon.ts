@@ -18,6 +18,7 @@ import {
   provider_remove_connection,
   provider_set_enabled,
   provider_check_credential,
+  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   net_check_endpoint,
   task_create,
   task_list,
@@ -77,6 +78,7 @@ export interface DaemonOptions {
   probe: CapabilityProbePort;
   catalog: CatalogService;
   providers: ProviderService;
+  auth?: { methods(): Promise<unknown>; start(provider: string, authType: "oauth"|"api_key"): Promise<unknown>; get(flowId: string): unknown; respond(flowId: string, response: string): boolean; cancel(flowId: string): boolean; logout(provider: string): Promise<boolean> };
   orchestrator: Orchestrator;
   editor: EditorService;
   autocomplete: AutocompleteService;
@@ -102,6 +104,7 @@ export class Daemon {
   private readonly probe: CapabilityProbePort;
   private readonly catalog: CatalogService;
   private readonly providers: ProviderService;
+  private readonly auth: NonNullable<DaemonOptions["auth"]>;
   private readonly orchestrator: Orchestrator;
   private readonly editor: EditorService;
   private readonly autocomplete: AutocompleteService;
@@ -121,6 +124,7 @@ export class Daemon {
     this.probe = opts.probe;
     this.catalog = opts.catalog;
     this.providers = opts.providers;
+    this.auth = opts.auth ?? { methods: async () => [], start: async () => { throw new Error("Pi authentication unavailable"); }, get: () => { throw new Error("Pi authentication unavailable"); }, respond: () => false, cancel: () => false, logout: async () => false };
     this.orchestrator = opts.orchestrator;
     this.editor = opts.editor;
     this.autocomplete = opts.autocomplete;
@@ -179,6 +183,12 @@ export class Daemon {
       const { connectionId } = payload as { connectionId: string };
       return this.providers.checkCredential(connectionId);
     });
+    this.dispatcher.handle(provider_auth_methods.name, async () => ({ providers: await this.auth.methods() }));
+    this.dispatcher.handle(provider_auth_start.name, async (payload) => { const { provider, authType } = payload as { provider: string; authType: "oauth"|"api_key" }; return { flow: await this.auth.start(provider, authType) }; });
+    this.dispatcher.handle(provider_auth_get.name, (payload) => ({ flow: this.auth.get((payload as { flowId: string }).flowId) }));
+    this.dispatcher.handle(provider_auth_respond.name, (payload) => { const p = payload as { flowId: string; response: string }; return { accepted: this.auth.respond(p.flowId, p.response) }; });
+    this.dispatcher.handle(provider_auth_cancel.name, (payload) => ({ cancelled: this.auth.cancel((payload as { flowId: string }).flowId) }));
+    this.dispatcher.handle(provider_auth_logout.name, async (payload) => ({ loggedOut: await this.auth.logout((payload as { provider: string }).provider) }));
     this.dispatcher.handle(net_check_endpoint.name, (payload) => {
       const { target } = payload as { target: string };
       return this.providers.checkEndpoint(target);

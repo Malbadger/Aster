@@ -13,6 +13,7 @@ export type {
   ContainerEngine,
 } from './types.js';
 export { PiSdkAdapter } from './sdk-adapter.js';
+export { PiAuthBroker, type PublicAuthFlow } from './auth-broker.js';
 export { probePiPublicExports } from './probes.js';
 export {
   ScriptedPiAdapter,

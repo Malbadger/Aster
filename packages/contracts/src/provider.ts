@@ -107,6 +107,45 @@ export const provider_check_credential = defineOperation({
   response: z.object({ connectionId: z.string(), status: CredentialStatus, checkedAt: z.string() }),
 });
 
+const AuthPrompt = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("text"), message: z.string(), placeholder: z.string().optional() }),
+  z.object({ type: z.literal("secret"), message: z.string(), placeholder: z.string().optional() }),
+  z.object({ type: z.literal("manual_code"), message: z.string(), placeholder: z.string().optional() }),
+  z.object({ type: z.literal("select"), message: z.string(), options: z.array(z.object({ id: z.string(), label: z.string(), description: z.string().optional() })) }),
+]);
+export const AuthFlow = z.object({
+  flowId: z.string(), provider: z.string(), authType: z.enum(["oauth", "api_key"]),
+  status: z.enum(["running", "waiting", "completed", "error", "cancelled"]),
+  messages: z.array(z.object({ type: z.enum(["info", "auth_url", "device_code", "progress"]), message: z.string().optional(), url: z.string().optional(), userCode: z.string().optional(), verificationUri: z.string().optional() })),
+  prompt: AuthPrompt.optional(), error: z.string().optional(),
+});
+export type AuthFlow = z.infer<typeof AuthFlow>;
+
+export const provider_auth_methods = defineOperation({
+  name: "provider_auth_methods", schemaVersion: 1, summary: "List Pi-owned provider login methods.", consequential: false,
+  request: z.object({}).strict(), response: z.object({ providers: z.array(z.object({ id: z.string(), name: z.string(), methods: z.array(z.enum(["oauth", "api_key"])), configured: z.boolean() })) }),
+});
+export const provider_auth_start = defineOperation({
+  name: "provider_auth_start", schemaVersion: 1, summary: "Start an interactive Pi-owned login flow.", consequential: true,
+  request: z.object({ provider: z.string(), authType: z.enum(["oauth", "api_key"]) }), response: z.object({ flow: AuthFlow }),
+});
+export const provider_auth_get = defineOperation({
+  name: "provider_auth_get", schemaVersion: 1, summary: "Read a Pi login flow without credential values.", consequential: false,
+  request: z.object({ flowId: z.string() }), response: z.object({ flow: AuthFlow }),
+});
+export const provider_auth_respond = defineOperation({
+  name: "provider_auth_respond", schemaVersion: 1, summary: "Answer the current Pi login prompt transiently.", consequential: true,
+  request: z.object({ flowId: z.string(), response: z.string() }), response: z.object({ accepted: z.boolean() }),
+});
+export const provider_auth_cancel = defineOperation({
+  name: "provider_auth_cancel", schemaVersion: 1, summary: "Cancel a Pi login flow.", consequential: true,
+  request: z.object({ flowId: z.string() }), response: z.object({ cancelled: z.boolean() }),
+});
+export const provider_auth_logout = defineOperation({
+  name: "provider_auth_logout", schemaVersion: 1, summary: "Remove Pi-owned credentials for a provider.", consequential: true,
+  request: z.object({ provider: z.string() }), response: z.object({ loggedOut: z.boolean() }),
+});
+
 // ---- Offline / network locality (RULE-D-006, REQ-D-009) ----
 
 export const NetworkCode = z.enum([
