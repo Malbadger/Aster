@@ -18,6 +18,8 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{atomic::{AtomicU64, Ordering}, Mutex};
 use tauri::{Emitter, Manager, State};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 
 static TERMINAL_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
@@ -38,9 +40,17 @@ struct VscodiumState(Mutex<Option<VscodiumServer>>);
 impl Drop for VscodiumState {
     fn drop(&mut self) {
         if let Ok(slot) = self.0.get_mut() {
-            if let Some(server) = slot.as_mut() { let _ = server.child.kill(); let _ = server.child.wait(); }
+            if let Some(server) = slot.as_mut() { terminate_process_group(&mut server.child); }
         }
     }
+}
+
+fn terminate_process_group(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    unsafe { libc::kill(-(child.id() as i32), libc::SIGTERM); }
+    #[cfg(not(unix))]
+    { let _ = child.kill(); }
+    let _ = child.wait();
 }
 
 #[derive(Clone, Serialize)]
@@ -156,11 +166,15 @@ fn editor_open(engine: String, file_path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>) -> Result<String, String> {
+    ensure_vscodium(&app, &state, directory)
+}
+
+fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Option<String>) -> Result<String, String> {
     let mut slot = state.0.lock().map_err(|_| "VSCodium state is unavailable".to_string())?;
     let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
     if let Some(server) = slot.as_mut() {
         if server.child.try_wait().map_err(|error| error.to_string())?.is_none() && server.folder == folder { return Ok(server.url.clone()); }
-        let _ = server.child.kill(); let _ = server.child.wait(); *slot = None;
+        terminate_process_group(&mut server.child); *slot = None;
     }
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
@@ -170,6 +184,8 @@ fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, direct
         command.args(["serve-web", "--host", "127.0.0.1", "--port", "0", "--without-connection-token", "--disable-telemetry", "--server-data-dir"])
             .arg(&data_dir).arg("--default-folder").arg(&folder)
             .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        #[cfg(unix)]
+        command.process_group(0);
         sanitize_child_environment(&mut command);
         match command.spawn() {
             Ok(mut child) => {
@@ -182,7 +198,7 @@ fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, direct
                 });
                 match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
                     Ok(url) => { *slot = Some(VscodiumServer { child, url: url.clone(), folder: folder.clone() }); return Ok(url); }
-                    Err(_) => { let _ = child.kill(); last_error = format!("{program} did not publish its local URL"); }
+                    Err(_) => { terminate_process_group(&mut child); last_error = format!("{program} did not publish its local URL"); }
                 }
             }
             Err(error) => last_error = format!("{program}: {error}"),
@@ -326,6 +342,14 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             daemon_runtime::start(app.handle()).map_err(std::io::Error::other)?;
+            // Start the loopback VSCodium host with LAW itself. This hides the
+            // one-time server initialization behind ordinary application use,
+            // while the editor command can still retry or switch workspaces.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let state = handle.state::<VscodiumState>();
+                let _ = ensure_vscodium(&handle, &state, None);
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_external_url, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])

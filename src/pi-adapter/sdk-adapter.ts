@@ -321,8 +321,14 @@ function parseToggle(value: string, current: boolean): boolean {
 export function mapPiEvent(ev: AgentSessionEvent): LawEvent | null {
   const e = ev as { type?: string; [k: string]: unknown };
   switch (e.type) {
-    case 'assistant_message':
+    case 'assistant_message': {
+      const text = extractText(e);
+      return text ? { kind: 'assistant_message', text } : null;
+    }
     case 'message_end': {
+      const message = e.message as { role?: string } | undefined;
+      const role = message?.role ?? (typeof e.role === 'string' ? e.role : undefined);
+      if (role !== 'assistant') return null;
       const text = extractText(e);
       return text ? { kind: 'assistant_message', text } : null;
     }

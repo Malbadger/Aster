@@ -1740,6 +1740,7 @@ dependencies = [
 name = "law-desktop"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "portable-pty",
  "serde",
  "serde_json",
