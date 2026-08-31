@@ -14,7 +14,8 @@ use serde::Serialize;
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::Path;
+use std::net::{SocketAddr, TcpStream};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{atomic::{AtomicU64, Ordering}, Mutex};
 use tauri::{Emitter, Manager, State};
@@ -51,6 +52,43 @@ fn terminate_process_group(child: &mut std::process::Child) {
     #[cfg(not(unix))]
     { let _ = child.kill(); }
     let _ = child.wait();
+}
+
+fn executable_in_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path).map(|dir| dir.join(name)).find(|candidate| candidate.is_file())
+    })
+}
+
+fn find_vscodium_tunnel() -> Option<PathBuf> {
+    if let Some(direct) = executable_in_path("codium-tunnel") { return Some(direct); }
+    for launcher in ["codium", "code-oss"] {
+        let Some(path) = executable_in_path(launcher) else { continue };
+        let resolved = std::fs::canonicalize(path).ok()?;
+        let sibling = resolved.parent()?.join("codium-tunnel");
+        if sibling.is_file() { return Some(sibling); }
+    }
+    None
+}
+
+fn wait_for_vscodium_http(url: &str, timeout: std::time::Duration) -> Result<(), String> {
+    let authority = url.strip_prefix("http://127.0.0.1:").ok_or_else(|| "VSCodium published a non-loopback URL".to_string())?;
+    let port = authority.split('/').next().and_then(|value| value.parse::<u16>().ok()).ok_or_else(|| "VSCodium published an invalid port".to_string())?;
+    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let deadline = std::time::Instant::now() + timeout;
+    while std::time::Instant::now() < deadline {
+        if let Ok(mut stream) = TcpStream::connect_timeout(&address, std::time::Duration::from_millis(300)) {
+            let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(500)));
+            if stream.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").is_ok() {
+                let mut response = [0_u8; 32];
+                if let Ok(count) = stream.read(&mut response) {
+                    if response[..count].starts_with(b"HTTP/1.1 200") { return Ok(()); }
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    Err("VSCodium did not become HTTP-ready".into())
 }
 
 #[derive(Clone, Serialize)]
@@ -178,33 +216,41 @@ fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Opt
     }
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
-    let mut last_error = String::new();
-    for program in ["codium", "code-oss"] {
-        let mut command = Command::new(program);
-        command.args(["serve-web", "--host", "127.0.0.1", "--port", "0", "--without-connection-token", "--disable-telemetry", "--server-data-dir"])
-            .arg(&data_dir).arg("--default-folder").arg(&folder)
-            .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        #[cfg(unix)]
-        command.process_group(0);
-        sanitize_child_environment(&mut command);
-        match command.spawn() {
-            Ok(mut child) => {
-                let stdout = child.stdout.take().ok_or_else(|| "Could not read VSCodium startup output".to_string())?;
-                let (sender, receiver) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                        if let Some(url) = line.split_whitespace().find(|part| part.starts_with("http://127.0.0.1:")) { let _ = sender.send(url.to_string()); break; }
+    let program = find_vscodium_tunnel().ok_or_else(|| "Could not find the VSCodium server executable (codium-tunnel)".to_string())?;
+    let mut command = Command::new(&program);
+    command.args(["serve-web", "--host", "127.0.0.1", "--port", "0", "--without-connection-token", "--accept-server-license-terms", "--disable-telemetry", "--server-data-dir"])
+        .arg(&data_dir).arg("--default-folder").arg(&folder)
+        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    command.process_group(0);
+    sanitize_child_environment(&mut command);
+    match command.spawn() {
+        Ok(mut child) => {
+            let stdout = child.stdout.take().ok_or_else(|| "Could not read VSCodium startup output".to_string())?;
+            let stderr = child.stderr.take();
+            let (sender, receiver) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let mut published = false;
+                for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                    if !published {
+                        if let Some(url) = line.split_whitespace().find(|part| part.starts_with("http://127.0.0.1:")) {
+                            let _ = sender.send(url.to_string());
+                            published = true;
+                        }
                     }
-                });
-                match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
-                    Ok(url) => { *slot = Some(VscodiumServer { child, url: url.clone(), folder: folder.clone() }); return Ok(url); }
-                    Err(_) => { terminate_process_group(&mut child); last_error = format!("{program} did not publish its local URL"); }
                 }
+            });
+            if let Some(mut stderr) = stderr { std::thread::spawn(move || { let _ = std::io::copy(&mut stderr, &mut std::io::sink()); }); }
+            match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
+                Ok(url) => match wait_for_vscodium_http(&url, std::time::Duration::from_secs(20)) {
+                    Ok(()) => { *slot = Some(VscodiumServer { child, url: url.clone(), folder: folder.clone() }); return Ok(url); }
+                    Err(error) => { terminate_process_group(&mut child); return Err(error); }
+                },
+                Err(_) => { terminate_process_group(&mut child); return Err(format!("{} did not publish its local URL", program.display())); }
             }
-            Err(error) => last_error = format!("{program}: {error}"),
         }
+        Err(error) => return Err(format!("{}: {error}", program.display())),
     }
-    Err(format!("Could not start embedded VSCodium: {last_error}"))
 }
 
 #[tauri::command]

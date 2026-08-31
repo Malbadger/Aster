@@ -81,6 +81,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [authOpen, setAuthOpen] = React.useState(false);
   const [authBrowserError, setAuthBrowserError] = React.useState<string>();
   const openedAuthUrl = React.useRef<string>();
+  const refreshedAuthFlow = React.useRef<string>();
   const selected = models.find((model) => model.id === selectedId);
 
   const refreshCatalog = React.useCallback(async (search = "") => {
@@ -145,6 +146,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}. Use Open browser to try again.`);
     });
   }, [authFlow?.messages]);
+  React.useEffect(() => {
+    if (authFlow?.status !== "completed" || refreshedAuthFlow.current === authFlow.flowId) return;
+    refreshedAuthFlow.current = authFlow.flowId;
+    void refreshCatalog(query);
+  }, [authFlow?.flowId, authFlow?.status, query, refreshCatalog]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
 
   React.useEffect(() => {
@@ -232,14 +238,14 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       if (name === "login") {
         local("user", text);
         const result = await client.call(provider_auth_methods, {}); setAuthProviders(result.providers); setAuthOpen(true); setAuthFlow(undefined);
-        const requested = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args.toLowerCase();
+        const requested = args.toLowerCase() === "claude-pro" ? "anthropic" : ["chatgpt", "openai"].includes(args.toLowerCase()) ? "openai-codex" : args.toLowerCase();
         const provider = requested && result.providers.find((item) => item.id === requested);
         if (provider && provider.methods.length === 1) setAuthFlow((await client.call(provider_auth_start, { provider: provider.id, authType: provider.methods[0]! })).flow);
         return;
       }
       if (name === "logout") {
         local("user", text);
-        const provider = args.toLowerCase() === "claude-pro" ? "anthropic" : args.toLowerCase() === "chatgpt" ? "openai" : args.toLowerCase();
+        const provider = args.toLowerCase() === "claude-pro" ? "anthropic" : ["chatgpt", "openai"].includes(args.toLowerCase()) ? "openai-codex" : args.toLowerCase();
         if (!provider) { local("assistant", "Use /logout <provider>, for example /logout anthropic."); return; }
         await client.call(provider_auth_logout, { provider }); local("assistant", `Logged out of ${provider}.`); await refreshCatalog(); return;
       }
@@ -356,7 +362,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
-    editor: openFile ? <VscodiumEditor directory={workspaceRoot ?? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/")))} /> : undefined,
+    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : undefined)} />,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,

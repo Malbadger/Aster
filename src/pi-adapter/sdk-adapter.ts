@@ -40,16 +40,11 @@ import type {
 
 const TESTED_RANGE = '0.84.4';
 
-/** Map a LAW ProviderId to Pi's provider identifier. */
+/** Preserve Pi-native provider IDs while accepting legacy LAW aliases. */
 function piProviderId(p: ProviderId): string {
-  switch (p) {
-    case 'ollama':
-      return 'ollama';
-    case 'chatgpt':
-      return 'openai';
-    case 'claude-pro':
-      return 'anthropic';
-  }
+  if (p === 'chatgpt') return 'openai-codex';
+  if (p === 'claude-pro') return 'anthropic';
+  return p;
 }
 
 export class PiSdkAdapter implements PiAdapter {

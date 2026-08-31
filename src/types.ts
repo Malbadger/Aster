@@ -14,8 +14,8 @@ export type LawResult =
   | { blocked: string } // BLOCKED(OPEN-###)
   | { notRun: 'human-only' | 'environment' };
 
-/** Providers supported in v1 (DEC-004). Claude Max is deliberately absent (DEC-005). */
-export type ProviderId = 'ollama' | 'chatgpt' | 'claude-pro';
+/** Provider identifier owned by Pi or a local adapter. Providers are extensible. */
+export type ProviderId = string;
 
 export type Locality = 'local' | 'any';
 

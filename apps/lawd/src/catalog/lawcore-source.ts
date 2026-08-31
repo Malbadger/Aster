@@ -1,8 +1,9 @@
 /**
  * Real model source (BUILD-D-005). Binds to LAW Core:
  *   - `listOllamaModels()` for installed local models over loopback
- *   - `createPiAdapter().capabilities().providers` for configured providers
- * and maps both to provider-neutral ModelDescriptors. No model name drives
+ *   - `listAvailablePiModels()` for concrete Pi models with usable auth
+ * and maps both to provider-neutral ModelDescriptors. Providers themselves are
+ * never emitted as models. No model name drives
  * logic. Effort support is a conservative neutral default until adapters report
  * per-model effort maps (recorded as a provisional capability, not a silent
  * assumption). Executes where LAW Core `dist/` exists on the operator's machine; tests
@@ -50,30 +51,28 @@ export class LawCoreModelSource implements ModelSourcePort {
       // No local endpoint reachable — leave local models out; not an error.
     }
 
-    // Configured providers via LAW Core capabilities.
+    // Concrete authenticated remote models from Pi. Never synthesize a model
+    // from a provider name: OpenAI/Anthropic/Ollama are connection metadata.
     if (existsSync(join(this.lawRoot, "dist", "pi-adapter", "index.js"))) {
       try {
-        const piMod = await importCore<{ createPiAdapter: () => { capabilities(): Promise<any> } }>(
+        const piMod = await importCore<{ listAvailablePiModels: () => Promise<Array<{ provider: string; id: string; name: string; reasoning: boolean; vision: boolean }>> }>(
           this.lawRoot,
           "pi-adapter/index.js",
         );
-        const caps = await piMod.createPiAdapter().capabilities();
-        for (const p of caps.providers as Array<{ id: string; authAvailable: string; locality: string }>) {
-          const availability =
-            p.authAvailable === "available" ? "available" : p.authAvailable === "unknown" ? "unknown" : "auth-needed";
+        for (const model of await piMod.listAvailablePiModels()) {
+          if (model.provider === "ollama") continue;
           out.push({
-            id: `${p.id}:default`,
-            displayName: p.id,
-            provider: p.id,
-            locality: p.locality === "local" ? "local" : "remote",
-            availability: availability as ModelDescriptor["availability"],
-            effort: { supported: p.locality === "local" ? LOCAL_EFFORT : REMOTE_EFFORT },
-            capabilities: { tools: true, vision: false },
-            ...(availability === "auth-needed" ? { note: "sign-in required" } : {}),
+            id: `${model.provider}:${model.id}`,
+            displayName: model.name,
+            provider: model.provider,
+            locality: "remote",
+            availability: "available",
+            effort: { supported: model.reasoning ? REMOTE_EFFORT : ["medium"] },
+            capabilities: { tools: true, vision: model.vision },
           });
         }
       } catch {
-        // Capabilities unavailable (e.g. Pi missing) — local models still list.
+        // Pi registry unavailable — local models still list.
       }
     }
 
