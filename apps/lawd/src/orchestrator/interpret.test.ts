@@ -19,5 +19,6 @@ describe("interpret (REQ-D-014)", () => {
     const p = interpret("/frobnicate now");
     expect(p.interpretation.type).toBe("unknown-command");
     expect(p.interpretation.summary).toMatch(/Unknown command/);
+    expect(p.prompt).toBe("/frobnicate now");
   });
 });

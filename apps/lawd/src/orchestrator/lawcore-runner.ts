@@ -26,6 +26,7 @@ interface LawEventLike {
 
 interface PiSessionLike {
   submit(prompt: string): AsyncIterable<Record<string, unknown>>;
+  control?(command: string, argument?: string): Promise<string>;
   abort(): Promise<void>;
   dispose(): Promise<void>;
 }
@@ -34,28 +35,45 @@ interface PiAdapterLike {
 }
 
 export class LawCorePhaseRunner implements PhaseRunner {
+  private readonly sessions = new Map<string, { binding: string; session: PiSessionLike }>();
   constructor(private readonly lawRoot: string) {}
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
-    const mod = (await import(pathToFileURL(join(this.lawRoot, "dist", "pi-adapter", "index.js")).href)) as {
-      createPiAdapter: () => PiAdapterLike;
-    };
-    const adapter = mod.createPiAdapter();
+    const binding = `${req.identity.provider}\0${req.identity.model}\0${req.identity.effort}\0${req.workspaceRoot}`;
+    let retained = this.sessions.get(req.taskId);
+    if (req.prompt.trim() === "/clear") {
+      if (retained) await retained.session.dispose().catch(() => {});
+      this.sessions.delete(req.taskId);
+      yield { kind: "assistant", text: "Started a fresh Pi context for this chat." }; yield { kind: "settled" }; return;
+    }
+    if (retained && retained.binding !== binding) {
+      await retained.session.dispose().catch(() => {}); this.sessions.delete(req.taskId); retained = undefined;
+    }
+    if (!retained) {
+      const mod = (await import(pathToFileURL(join(this.lawRoot, "dist", "pi-adapter", "index.js")).href)) as { createPiAdapter: () => PiAdapterLike };
+      const adapter = mod.createPiAdapter();
+      // The retained interceptor still calls the daemon-owned gate. Task phases
+      // are serialized, and their workspace/tool surface is stable per binding.
+      const interceptor = (call: { tool: string; input: unknown; callId: string }) => {
+        const d = req.gate({ tool: call.tool, input: call.input, callId: call.callId });
+        return { decision: d.allow ? "allow" : "deny", reason: d.reason };
+      };
+      const session = await adapter.openSession({
+        profile: { id: req.identity.model, provider: req.identity.provider, modelPolicy: { allow: [], deny: [] }, locality: "any", authKind: "none" },
+        requestedModel: req.identity.model, effort: req.identity.effort, tools: req.tools, interceptor,
+        workspaceRoot: req.workspaceRoot, allowMutation: req.allowMutation,
+      });
+      retained = { binding, session }; this.sessions.set(req.taskId, retained);
+    }
+    const session = retained.session;
 
-    // LAW Core interceptor shape: (call) => { decision: 'allow'|'deny', reason }.
-    const interceptor = (call: { tool: string; input: unknown; callId: string }) => {
-      const d = req.gate({ tool: call.tool, input: call.input, callId: call.callId });
-      return { decision: d.allow ? "allow" : "deny", reason: d.reason };
-    };
-
-    const session = await adapter.openSession({
-      profile: { id: req.identity.model, provider: req.identity.provider, modelPolicy: { allow: [], deny: [] }, locality: "any", authKind: "none" },
-      requestedModel: req.identity.model,
-      tools: req.tools,
-      interceptor,
-      workspaceRoot: req.workspaceRoot,
-      allowMutation: req.allowMutation,
-    });
+    const control = /^\/(compact|session|stats|name|auto-compact|auto-retry)(?:\s+([\s\S]*))?$/.exec(req.prompt.trim());
+    if (control) {
+      if (!session.control) { yield { kind: "error", message: "This Pi adapter does not expose session controls." }; return; }
+      try { yield { kind: "assistant", text: await session.control(control[1]!, control[2]?.trim()) }; yield { kind: "settled" }; }
+      catch (error) { yield { kind: "error", message: error instanceof Error ? error.message : String(error) }; }
+      return;
+    }
 
     const onAbort = () => void session.abort().catch(() => {});
     req.signal.addEventListener("abort", onAbort, { once: true });
@@ -69,7 +87,6 @@ export class LawCorePhaseRunner implements PhaseRunner {
       }
     } finally {
       req.signal.removeEventListener("abort", onAbort);
-      await session.dispose().catch(() => {});
     }
   }
 }

@@ -25,6 +25,8 @@ export interface ToolDecision {
 export type ToolGate = (call: { tool: string; input: unknown; callId: string }) => ToolDecision;
 
 export interface PhaseRunRequest {
+  /** Stable chat identity; one Pi session is retained per task. */
+  taskId: string;
   identity: PhaseIdentity;
   prompt: string;
   tools: string[];

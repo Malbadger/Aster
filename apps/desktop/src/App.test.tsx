@@ -49,6 +49,6 @@ describe("App", () => {
     render(<App />);
     await screen.findByRole("textbox", { name: "Message" });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(invoke.mock.calls.filter(([, args]) => args.request.op === "daemon_get_health")).toHaveLength(1);
+    expect(invoke.mock.calls.filter(([, args]) => args?.request?.op === "daemon_get_health")).toHaveLength(1);
   });
 });

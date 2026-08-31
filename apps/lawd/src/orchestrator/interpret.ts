@@ -1,12 +1,13 @@
 /**
  * Prompt interpretation (REQ-D-014/015). The same composer accepts natural
  * language and slash commands. The interpretation is returned so the UI can show
- * it in chat before any consequential work; an unknown command stays editable
- * and explains options rather than executing.
+ * it in chat before any consequential work. Unknown slash commands are kept
+ * intact so Pi can resolve extension commands and prompt templates that LAW
+ * does not know about.
  */
 import type { Interpretation } from "@law/contracts";
 
-export const KNOWN_COMMANDS = ["help", "plan", "run", "audit", "model", "clear"] as const;
+export const KNOWN_COMMANDS = ["help", "plan", "run", "audit", "model", "clear", "compact", "session", "stats", "name", "auto-compact", "auto-retry"] as const;
 export type KnownCommand = (typeof KNOWN_COMMANDS)[number];
 
 export interface Parsed {
@@ -35,7 +36,7 @@ export function interpret(text: string): Parsed {
         command: name,
         summary: `Unknown command "/${name}". Known: ${KNOWN_COMMANDS.map((c) => `/${c}`).join(", ")}.`,
       },
-      prompt: args,
+      prompt: trimmed,
     };
   }
   return {

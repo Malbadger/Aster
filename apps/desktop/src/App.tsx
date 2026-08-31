@@ -123,6 +123,13 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   React.useEffect(() => { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }, [layout]);
   React.useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem(THEME_KEY, theme); }, [theme]);
   React.useEffect(() => {
+    if (view !== "workspace" && view !== "start") return;
+    // Warm VSCodium and its matching web host before the editor is requested.
+    // A later workspace change may restart the lightweight server, but reuses
+    // the downloaded host and persistent data directory.
+    void Promise.resolve(invoke<string>("vscodium_start", { directory: workspaceRoot })).catch(() => {});
+  }, [view, workspaceRoot]);
+  React.useEffect(() => {
     if (!authFlow || !["running", "waiting"].includes(authFlow.status)) return;
     const timer = window.setInterval(() => void client.call(provider_auth_get, { flowId: authFlow.flowId }).then((result) => setAuthFlow(result.flow)), 750);
     return () => window.clearInterval(timer);
@@ -210,9 +217,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         if (!selected.effort.supported.includes(requested)) { local("error", `${selected.displayName} does not support “${args}”. Available: ${selected.effort.supported.join(", ")}.`); return; }
         setEffort(requested); local("assistant", `Effort set to ${requested} for ${selected.displayName}.`); return;
       }
-      if (name === "clear") {
-        setEvents([]); return;
-      }
+      if (name === "new") { newChat(); return; }
       if (name === "login") {
         local("user", text);
         const result = await client.call(provider_auth_methods, {}); setAuthProviders(result.providers); setAuthOpen(true); setAuthFlow(undefined);

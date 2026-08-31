@@ -114,6 +114,8 @@ export class Orchestrator {
   } {
     const task = this.requireTask(input.taskId);
     const parsed = interpret(input.text);
+    const piControl = parsed.command && ["clear", "compact", "session", "stats", "name", "auto-compact", "auto-retry"].includes(parsed.command);
+    const phasePrompt = piControl || parsed.interpretation.type === "unknown-command" ? input.text.trim() : parsed.prompt || input.text;
 
     // One turn at a time — a mid-phase identity change is refused (RULE-D-003).
     if (this.running.has(task.taskId)) {
@@ -127,13 +129,10 @@ export class Orchestrator {
     }
 
     this.append(task.taskId, { kind: "user", taskId: task.taskId, text: input.text });
-    // Deterministic local commands (not phases).
-    if (parsed.interpretation.type === "unknown-command") {
-      this.append(task.taskId, { kind: "status", taskId: task.taskId, text: parsed.interpretation.summary });
-      return { accepted: false, interpretation: parsed.interpretation, status: "pending", reason: "unknown command", nextSeq: this.deps.store.nextSeq(task.taskId) };
-    }
+    // Deterministic local commands (not phases). Unknown slash commands pass
+    // through to Pi so installed extensions retain their native command surface.
     if (parsed.command === "help") {
-      this.append(task.taskId, { kind: "assistant", taskId: task.taskId, text: "Commands: /model, /effort, /login, /logout, /pi, /help, /plan, /run, /audit, /clear. Plain text runs through Pi with the selected model." });
+      this.append(task.taskId, { kind: "assistant", taskId: task.taskId, text: "Commands: /plan, /run, /audit, /model, /effort, /login, /logout, /compact, /session, /name, /auto-compact, /auto-retry, /clear. Plain text runs through the retained Pi session." });
       return { accepted: true, interpretation: parsed.interpretation, status: "completed", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
 
@@ -147,7 +146,7 @@ export class Orchestrator {
     const phase: Phase = {
       phaseId: this.id("phase"),
       taskId: task.taskId,
-      brief: parsed.prompt || input.text,
+      brief: phasePrompt,
       identity,
       status: "running",
       startedAt: this.now().toISOString(),
@@ -163,7 +162,7 @@ export class Orchestrator {
     });
 
     const controller = new AbortController();
-    const promise = this.execPhase(task, phase, parsed.prompt || input.text, controller);
+    const promise = this.execPhase(task, phase, phasePrompt, controller);
     this.running.set(task.taskId, { controller, promise, acknowledgedCancel: false });
 
     return { accepted: true, interpretation: parsed.interpretation, phaseId: phase.phaseId, status: "running", nextSeq: this.deps.store.nextSeq(task.taskId) };
@@ -180,6 +179,7 @@ export class Orchestrator {
     let cancelled = false;
     try {
       for await (const ev of this.deps.runner.run({
+        taskId: task.taskId,
         identity: phase.identity,
         prompt,
         tools: this.deps.allowedTools ?? DEFAULT_TOOLS,

@@ -56,6 +56,8 @@ export interface SessionSpec {
   profile: ProviderProfile;
   /** Exact model selected and policy-checked before the run. */
   requestedModel?: string;
+  /** Provider-neutral reasoning level, translated to Pi by the adapter. */
+  effort?: 'minimal' | 'low' | 'medium' | 'high' | 'max';
   /** Explicit tool allowlist for this session/node (REQ-013, per-node least privilege). */
   tools: string[];
   /** Pre-execution interceptor applied to every tool call (REQ-013). */
@@ -76,6 +78,8 @@ export interface PiSession {
   readonly sessionId: string;
   /** Submit a prompt; yields normalized, provider-neutral events (REQ-002). */
   submit(prompt: string): AsyncIterable<LawEvent>;
+  /** Structured equivalents of Pi's non-prompt slash controls. */
+  control?(command: string, argument?: string): Promise<string>;
   /** A reference to where the transcript lives, not its content (REQ-017). */
   transcriptRef(): TranscriptRef;
   abort(): Promise<void>;

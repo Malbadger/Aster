@@ -178,6 +178,12 @@ export class PiSdkAdapter implements PiAdapter {
       resourceLoader: loader,
       sessionManager: SessionManager.create(spec.workspaceRoot),
     });
+    if (spec.effort && session.getAvailableThinkingLevels().length > 0) {
+      const requested = spec.effort === 'max' ? 'xhigh' : spec.effort;
+      const available = session.getAvailableThinkingLevels();
+      const effective = available.includes(requested as any) ? requested : available.at(-1);
+      if (effective) session.setThinkingLevel(effective as any);
+    }
 
     return new SdkSession(session, deniedSink);
   }
@@ -264,6 +270,32 @@ class SdkSession implements PiSession {
     return { sessionId: this.sessionId, storage: 'pi-session' };
   }
 
+  async control(command: string, argument = ''): Promise<string> {
+    switch (command) {
+      case 'compact': {
+        const result = await this.session.compact(argument || undefined);
+        return "Context compacted.";
+      }
+      case 'session':
+      case 'stats': {
+        const stats = this.session.getSessionStats();
+        return `Session ${stats.sessionId}: ${stats.totalMessages} messages, ${stats.toolCalls} tool calls, ${stats.tokens.input} input tokens, ${stats.tokens.output} output tokens, ${stats.tokens.cacheRead} cache-read tokens.`;
+      }
+      case 'name':
+        if (!argument) return this.session.sessionName ? `Session name: ${this.session.sessionName}` : 'This session has no name.';
+        this.session.setSessionName(argument); return `Session named “${argument}”.`;
+      case 'auto-compact': {
+        const enabled = parseToggle(argument, this.session.autoCompactionEnabled);
+        this.session.setAutoCompactionEnabled(enabled); return `Automatic compaction ${enabled ? 'enabled' : 'disabled'}.`;
+      }
+      case 'auto-retry': {
+        const enabled = parseToggle(argument, this.session.autoRetryEnabled);
+        this.session.setAutoRetryEnabled(enabled); return `Automatic retry ${enabled ? 'enabled' : 'disabled'}.`;
+      }
+      default: throw new Error(`Unsupported Pi control: /${command}`);
+    }
+  }
+
   async abort(): Promise<void> {
     await this.session.abort();
   }
@@ -272,6 +304,13 @@ class SdkSession implements PiSession {
     this.session.dispose();
     return Promise.resolve();
   }
+}
+
+function parseToggle(value: string, current: boolean): boolean {
+  if (!value) return !current;
+  if (['on', 'true', 'enable', 'enabled'].includes(value.toLowerCase())) return true;
+  if (['off', 'false', 'disable', 'disabled'].includes(value.toLowerCase())) return false;
+  throw new Error('Expected on or off.');
 }
 
 /**

@@ -30,7 +30,7 @@ struct TerminalSession {
 #[derive(Default)]
 struct TerminalState(Mutex<HashMap<String, TerminalSession>>);
 
-struct VscodiumServer { child: std::process::Child, url: String }
+struct VscodiumServer { child: std::process::Child, url: String, folder: String }
 
 #[derive(Default)]
 struct VscodiumState(Mutex<Option<VscodiumServer>>);
@@ -123,12 +123,13 @@ fn editor_open(engine: String, file_path: String) -> Result<String, String> {
 #[tauri::command]
 fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>) -> Result<String, String> {
     let mut slot = state.0.lock().map_err(|_| "VSCodium state is unavailable".to_string())?;
+    let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
     if let Some(server) = slot.as_mut() {
-        if server.child.try_wait().map_err(|error| error.to_string())?.is_none() { return Ok(server.url.clone()); }
+        if server.child.try_wait().map_err(|error| error.to_string())?.is_none() && server.folder == folder { return Ok(server.url.clone()); }
+        let _ = server.child.kill(); let _ = server.child.wait(); *slot = None;
     }
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
-    let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
     let mut last_error = String::new();
     for program in ["codium", "code-oss"] {
         let mut command = Command::new(program);
@@ -146,7 +147,7 @@ fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, direct
                     }
                 });
                 match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
-                    Ok(url) => { *slot = Some(VscodiumServer { child, url: url.clone() }); return Ok(url); }
+                    Ok(url) => { *slot = Some(VscodiumServer { child, url: url.clone(), folder: folder.clone() }); return Ok(url); }
                     Err(_) => { let _ = child.kill(); last_error = format!("{program} did not publish its local URL"); }
                 }
             }

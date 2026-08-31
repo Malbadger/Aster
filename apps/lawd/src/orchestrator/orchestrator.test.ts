@@ -81,12 +81,14 @@ describe("Orchestrator", () => {
     expect(res.reason).toMatch(/no model selected/);
   });
 
-  it("keeps an unknown slash command editable and does not execute", () => {
+  it("passes an unknown slash command intact to Pi", async () => {
     const { orch } = make(new ScriptedRunner());
     const { task } = orch.createTask({ title: "chat", defaultIdentity: IDENTITY });
     const res = orch.sendMessage({ taskId: task.taskId, text: "/frobnicate x" });
-    expect(res.accepted).toBe(false);
+    expect(res.accepted).toBe(true);
     expect(res.interpretation.type).toBe("unknown-command");
+    await orch.idle(task.taskId);
+    expect(orch.getEvents(task.taskId, 0).events.some((e) => e.text?.includes("Working on: /frobnicate x"))).toBe(true);
   });
 
   it("handles /help as a deterministic non-phase command", () => {
