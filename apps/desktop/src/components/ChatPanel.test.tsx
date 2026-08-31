@@ -39,4 +39,12 @@ describe("ChatPanel", () => {
     render(<ChatPanel events={[{ id: "s", taskId: "t", seq: 0, at: "", kind: "status", text: "Phase completed." }]} running={false} onSend={() => {}} onStop={() => {}} />);
     expect(screen.queryByText("Phase completed.")).toBeNull();
   });
+
+  it("hides a legacy assistant event that exactly echoes the preceding user turn", () => {
+    render(<ChatPanel events={[
+      { id: "u", taskId: "t", seq: 0, at: "", kind: "user", text: "are you running?" },
+      { id: "a", taskId: "t", seq: 1, at: "", kind: "assistant", text: "are you running?" },
+    ]} running={false} onSend={() => {}} onStop={() => {}} />);
+    expect(screen.getAllByText("are you running?")).toHaveLength(1);
+  });
 });

@@ -35,7 +35,12 @@ function eventColor(kind: ChatEvent["kind"]): string {
 
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
-  const visibleEvents = props.events.filter((event) => event.kind !== "status");
+  const conversationalEvents = props.events.filter((event) => event.kind !== "status");
+  const visibleEvents = conversationalEvents.filter((event, index) => {
+    if (event.kind !== "assistant" || index === 0) return true;
+    const previous = conversationalEvents[index - 1];
+    return !(previous?.kind === "user" && Boolean(event.text) && previous.text?.trim() === event.text?.trim());
+  });
   const submit = () => {
     const t = text.trim();
     if (!t || props.running) return;
