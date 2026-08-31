@@ -66,12 +66,22 @@ fn home_directory() -> Result<String, String> {
     safe_directory(None).ok_or_else(|| "Could not determine the user home directory".into())
 }
 
+fn bundled_pi_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
+    let resources = app.path().resource_dir().ok()?;
+    let node = resources.join("runtime/node");
+    let cli = resources.join("runtime/app/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
+    if !node.is_file() || !cli.is_file() { return None; }
+    let mut command = CommandBuilder::new(node);
+    command.arg(cli);
+    Some(command)
+}
+
 #[tauri::command]
 fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, directory: Option<String>, cols: u16, rows: u16, program: Option<String>) -> Result<String, String> {
     let pair = native_pty_system().openpty(PtySize { rows: rows.max(2), cols: cols.max(2), pixel_width: 0, pixel_height: 0 })
         .map_err(|error| format!("Could not allocate terminal: {error}"))?;
     let mut command = if program.as_deref() == Some("pi") {
-        CommandBuilder::new("pi")
+        bundled_pi_command(&app).unwrap_or_else(|| CommandBuilder::new("pi"))
     } else {
         let shell = std::env::var("SHELL").ok().filter(|value| Path::new(value).is_absolute()).unwrap_or_else(|| "/bin/bash".into());
         CommandBuilder::new(shell)
