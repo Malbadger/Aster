@@ -1,0 +1,111 @@
+{
+  "name": "law-workbench-themes",
+  "displayName": "LAW Workbench Themes",
+  "description": "Editor palettes synchronized with the LAW desktop application.",
+  "version": "1.1.0",
+  "publisher": "law",
+  "files": [
+    "themes/**",
+    "README.md"
+  ],
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "LAW Graphite",
+        "uiTheme": "vs-dark",
+        "path": "./themes/law-graphite-color-theme.json"
+      },
+      {
+        "label": "LAW Paper",
+        "uiTheme": "vs",
+        "path": "./themes/law-paper-color-theme.json"
+      },
+      {
+        "label": "LAW Midnight",
+        "uiTheme": "vs-dark",
+        "path": "./themes/law-midnight-color-theme.json"
+      },
+      {
+        "label": "LAW High Contrast",
+        "uiTheme": "hc-black",
+        "path": "./themes/law-high-contrast-color-theme.json"
+      },
+      {
+        "label": "Dracula",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dracula-color-theme.json"
+      },
+      {
+        "label": "One Dark Pro",
+        "uiTheme": "vs-dark",
+        "path": "./themes/one-dark-pro-color-theme.json"
+      },
+      {
+        "label": "Monokai",
+        "uiTheme": "vs-dark",
+        "path": "./themes/monokai-color-theme.json"
+      },
+      {
+        "label": "Solarized Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/solarized-dark-color-theme.json"
+      },
+      {
+        "label": "Solarized Light",
+        "uiTheme": "vs",
+        "path": "./themes/solarized-light-color-theme.json"
+      },
+      {
+        "label": "Nord",
+        "uiTheme": "vs-dark",
+        "path": "./themes/nord-color-theme.json"
+      },
+      {
+        "label": "Gruvbox Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/gruvbox-dark-color-theme.json"
+      },
+      {
+        "label": "GitHub Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/github-dark-color-theme.json"
+      },
+      {
+        "label": "GitHub Light",
+        "uiTheme": "vs",
+        "path": "./themes/github-light-color-theme.json"
+      },
+      {
+        "label": "Tokyo Night",
+        "uiTheme": "vs-dark",
+        "path": "./themes/tokyo-night-color-theme.json"
+      },
+      {
+        "label": "Night Owl",
+        "uiTheme": "vs-dark",
+        "path": "./themes/night-owl-color-theme.json"
+      },
+      {
+        "label": "Catppuccin Mocha",
+        "uiTheme": "vs-dark",
+        "path": "./themes/catppuccin-mocha-color-theme.json"
+      },
+      {
+        "label": "Synthwave 84",
+        "uiTheme": "vs-dark",
+        "path": "./themes/synthwave-84-color-theme.json"
+      },
+      {
+        "label": "Atom One Light",
+        "uiTheme": "vs",
+        "path": "./themes/atom-one-light-color-theme.json"
+      }
+    ]
+  }
+}

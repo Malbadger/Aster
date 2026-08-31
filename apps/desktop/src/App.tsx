@@ -130,8 +130,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     // Warm VSCodium and its matching web host before the editor is requested.
     // A later workspace change may restart the lightweight server, but reuses
     // the downloaded host and persistent data directory.
-    void Promise.resolve(invoke<string>("vscodium_start", { directory: workspaceRoot })).catch(() => {});
-  }, [view, workspaceRoot]);
+    void Promise.resolve(invoke<string>("vscodium_start", { directory: workspaceRoot, theme })).catch(() => {});
+  }, [view, workspaceRoot, theme]);
   React.useEffect(() => {
     if (!authFlow || !["running", "waiting"].includes(authFlow.status)) return;
     const timer = window.setInterval(() => void client.call(provider_auth_get, { flowId: authFlow.flowId }).then((result) => setAuthFlow(result.flow)), 750);
@@ -362,7 +362,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
-    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : undefined)} />,
+    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : undefined)} theme={theme} />,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,

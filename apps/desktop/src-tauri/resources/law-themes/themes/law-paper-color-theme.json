@@ -1,0 +1,25 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "LAW Paper",
+  "type": "light",
+  "include": "./atom-one-light-color-theme.json",
+  "semanticHighlighting": true,
+  "colors": {
+    "editor.background": "#f6f4f1",
+    "editor.foreground": "#28252b",
+    "editorGroupHeader.tabsBackground": "#ebe8e3",
+    "tab.activeBackground": "#f6f4f1",
+    "tab.inactiveBackground": "#ebe8e3",
+    "titleBar.activeBackground": "#ebe8e3",
+    "activityBar.background": "#ebe8e3",
+    "sideBar.background": "#ebe8e3",
+    "statusBar.background": "#177567",
+    "statusBar.foreground": "#ffffff",
+    "panel.background": "#ffffff",
+    "terminal.background": "#ffffff",
+    "input.background": "#ffffff",
+    "button.background": "#177567",
+    "button.foreground": "#ffffff",
+    "focusBorder": "#177567"
+  }
+}

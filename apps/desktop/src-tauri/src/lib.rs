@@ -33,7 +33,12 @@ struct TerminalSession {
 #[derive(Default)]
 struct TerminalState(Mutex<HashMap<String, TerminalSession>>);
 
-struct VscodiumServer { child: std::process::Child, url: String, folder: String }
+struct VscodiumServer {
+    child: std::process::Child,
+    theme_proxy: std::process::Child,
+    url: String,
+    folder: String,
+}
 
 #[derive(Default)]
 struct VscodiumState(Mutex<Option<VscodiumServer>>);
@@ -41,7 +46,10 @@ struct VscodiumState(Mutex<Option<VscodiumServer>>);
 impl Drop for VscodiumState {
     fn drop(&mut self) {
         if let Ok(slot) = self.0.get_mut() {
-            if let Some(server) = slot.as_mut() { terminate_process_group(&mut server.child); }
+            if let Some(server) = slot.as_mut() {
+                terminate_process_group(&mut server.theme_proxy);
+                terminate_process_group(&mut server.child);
+            }
         }
     }
 }
@@ -89,6 +97,139 @@ fn wait_for_vscodium_http(url: &str, timeout: std::time::Duration) -> Result<(),
         std::thread::sleep(std::time::Duration::from_millis(150));
     }
     Err("VSCodium did not become HTTP-ready".into())
+}
+
+fn vscodium_theme_name(theme: Option<&str>) -> &'static str {
+    match theme.unwrap_or("graphite") {
+        "light" => "LAW Paper",
+        "midnight" => "LAW Midnight",
+        "high-contrast" => "LAW High Contrast",
+        "dracula" => "Dracula",
+        "one-dark-pro" => "One Dark Pro",
+        "monokai" => "Monokai",
+        "solarized-dark" => "Solarized Dark",
+        "solarized-light" => "Solarized Light",
+        "nord" => "Nord",
+        "gruvbox-dark" => "Gruvbox Dark",
+        "github-dark" => "GitHub Dark",
+        "github-light" => "GitHub Light",
+        "tokyo-night" => "Tokyo Night",
+        "night-owl" => "Night Owl",
+        "catppuccin-mocha" => "Catppuccin Mocha",
+        "synthwave-84" => "Synthwave 84",
+        "atom-one-light" => "Atom One Light",
+        _ => "LAW Graphite",
+    }
+}
+
+fn vscodium_theme_id(theme: Option<&str>) -> &'static str {
+    match theme.unwrap_or("graphite") {
+        "light" => "light",
+        "midnight" => "midnight",
+        "high-contrast" => "high-contrast",
+        "dracula" => "dracula",
+        "one-dark-pro" => "one-dark-pro",
+        "monokai" => "monokai",
+        "solarized-dark" => "solarized-dark",
+        "solarized-light" => "solarized-light",
+        "nord" => "nord",
+        "gruvbox-dark" => "gruvbox-dark",
+        "github-dark" => "github-dark",
+        "github-light" => "github-light",
+        "tokyo-night" => "tokyo-night",
+        "night-owl" => "night-owl",
+        "catppuccin-mocha" => "catppuccin-mocha",
+        "synthwave-84" => "synthwave-84",
+        "atom-one-light" => "atom-one-light",
+        _ => "graphite",
+    }
+}
+
+fn themed_vscodium_url(url: &str, theme: Option<&str>) -> String {
+    format!("{}?lawTheme={}", url.trim_end_matches('/'), vscodium_theme_id(theme))
+}
+
+fn spawn_vscodium_theme_proxy(app: &tauri::AppHandle, upstream: &str) -> Result<(std::process::Child, String), String> {
+    let resources = app.path().resource_dir().map_err(|error| error.to_string())?;
+    let node = resources.join("runtime/node");
+    let script = resources.join("vscodium-theme-proxy.mjs");
+    let theme_directory = app.path().app_data_dir().map_err(|error| error.to_string())?
+        .join("vscodium-server/extensions/law.law-workbench-themes-1.1.0/themes");
+    if !node.is_file() || !script.is_file() { return Err("The bundled LAW VSCodium theme proxy is missing".into()); }
+    if !theme_directory.is_dir() { return Err("The installed LAW VSCodium themes are missing".into()); }
+    let mut command = Command::new(node);
+    command.arg(script).arg(upstream).arg(theme_directory)
+        .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    command.process_group(0);
+    sanitize_child_environment(&mut command);
+    let mut child = command.spawn().map_err(|error| format!("Could not start LAW VSCodium theme proxy: {error}"))?;
+    let stdout = child.stdout.take().ok_or_else(|| "Could not read LAW VSCodium theme proxy output".to_string())?;
+    let stderr = child.stderr.take();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut published = false;
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !published && line.starts_with("http://127.0.0.1:") {
+                let _ = sender.send(line);
+                published = true;
+            }
+        }
+    });
+    if let Some(mut stderr) = stderr { std::thread::spawn(move || { let _ = std::io::copy(&mut stderr, &mut std::io::sink()); }); }
+    match receiver.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(url) => {
+            if let Err(error) = wait_for_vscodium_http(&url, std::time::Duration::from_secs(10)) {
+                terminate_process_group(&mut child);
+                return Err(format!("LAW VSCodium theme proxy failed readiness: {error}"));
+            }
+            Ok((child, url))
+        }
+        Err(_) => {
+            terminate_process_group(&mut child);
+            Err("LAW VSCodium theme proxy did not publish its local URL".into())
+        }
+    }
+}
+
+fn prepare_vscodium_profile(app: &tauri::AppHandle, program: &Path, data_dir: &Path, theme: Option<&str>) -> Result<(), String> {
+    let bundled = app.path().resource_dir().map_err(|error| error.to_string())?.join("law-workbench-themes.vsix");
+    if !bundled.is_file() { return Err("The bundled LAW editor themes are missing".into()); }
+
+    let extensions = data_dir.join("extensions");
+    let installed = extensions.join("law.law-workbench-themes-1.1.0/package.json");
+    let registered = std::fs::read_to_string(extensions.join("extensions.json"))
+        .map(|contents| contents.contains("law.law-workbench-themes"))
+        .unwrap_or(false);
+    if !installed.is_file() || !registered {
+        std::fs::create_dir_all(&extensions).map_err(|error| format!("Could not create LAW theme extension directory: {error}"))?;
+        let mut install = Command::new(program);
+        install.arg("--extensions-dir").arg(&extensions)
+            .arg("--install-extension").arg(&bundled).arg("--force");
+        sanitize_child_environment(&mut install);
+        let output = install.output().map_err(|error| format!("Could not start the VSCodium theme installer: {error}"))?;
+        if !output.status.success() {
+            return Err(format!("Could not install LAW editor themes: {}", String::from_utf8_lossy(&output.stderr).trim()));
+        }
+    }
+
+    let settings_path = data_dir.join("data/User/settings.json");
+    let settings_dir = settings_path.parent().ok_or_else(|| "Could not resolve VSCodium settings directory".to_string())?;
+    std::fs::create_dir_all(settings_dir).map_err(|error| format!("Could not create VSCodium settings directory: {error}"))?;
+    let mut settings = if settings_path.is_file() {
+        serde_json::from_slice::<Value>(&std::fs::read(&settings_path).map_err(|error| error.to_string())?)
+            .map_err(|error| format!("VSCodium settings are not valid JSON: {error}"))?
+    } else {
+        Value::Object(serde_json::Map::new())
+    };
+    let object = settings.as_object_mut().ok_or_else(|| "VSCodium settings must contain a JSON object".to_string())?;
+    object.insert("workbench.colorTheme".into(), Value::String(vscodium_theme_name(theme).into()));
+    object.insert("window.autoDetectColorScheme".into(), Value::Bool(false));
+    let temporary = settings_path.with_extension("json.law-tmp");
+    std::fs::write(&temporary, serde_json::to_vec_pretty(&settings).map_err(|error| error.to_string())?)
+        .map_err(|error| format!("Could not write VSCodium theme setting: {error}"))?;
+    std::fs::rename(&temporary, &settings_path).map_err(|error| format!("Could not activate VSCodium theme setting: {error}"))?;
+    Ok(())
 }
 
 #[derive(Clone, Serialize)]
@@ -203,23 +344,31 @@ fn editor_open(engine: String, file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>) -> Result<String, String> {
-    ensure_vscodium(&app, &state, directory)
+fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>, theme: Option<String>) -> Result<String, String> {
+    ensure_vscodium(&app, &state, directory, theme)
 }
 
-fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Option<String>) -> Result<String, String> {
+fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Option<String>, theme: Option<String>) -> Result<String, String> {
     let mut slot = state.0.lock().map_err(|_| "VSCodium state is unavailable".to_string())?;
     let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
-    if let Some(server) = slot.as_mut() {
-        if server.child.try_wait().map_err(|error| error.to_string())?.is_none() && server.folder == folder { return Ok(server.url.clone()); }
-        terminate_process_group(&mut server.child); *slot = None;
-    }
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
     let program = find_vscodium_tunnel().ok_or_else(|| "Could not find the VSCodium server executable (codium-tunnel)".to_string())?;
+    prepare_vscodium_profile(app, &program, &data_dir, theme.as_deref())?;
+    if let Some(server) = slot.as_mut() {
+        let editor_running = server.child.try_wait().map_err(|error| error.to_string())?.is_none();
+        let proxy_running = server.theme_proxy.try_wait().map_err(|error| error.to_string())?.is_none();
+        if editor_running && proxy_running && server.folder == folder {
+            return Ok(themed_vscodium_url(&server.url, theme.as_deref()));
+        }
+        terminate_process_group(&mut server.theme_proxy);
+        terminate_process_group(&mut server.child);
+        *slot = None;
+    }
     let mut command = Command::new(&program);
     command.args(["serve-web", "--host", "127.0.0.1", "--port", "0", "--without-connection-token", "--accept-server-license-terms", "--disable-telemetry", "--server-data-dir"])
         .arg(&data_dir).arg("--default-folder").arg(&folder)
+        .env("VSCODE_EXTENSIONS", data_dir.join("extensions"))
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
     command.process_group(0);
@@ -243,7 +392,14 @@ fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Opt
             if let Some(mut stderr) = stderr { std::thread::spawn(move || { let _ = std::io::copy(&mut stderr, &mut std::io::sink()); }); }
             match receiver.recv_timeout(std::time::Duration::from_secs(20)) {
                 Ok(url) => match wait_for_vscodium_http(&url, std::time::Duration::from_secs(20)) {
-                    Ok(()) => { *slot = Some(VscodiumServer { child, url: url.clone(), folder: folder.clone() }); return Ok(url); }
+                    Ok(()) => match spawn_vscodium_theme_proxy(app, &url) {
+                        Ok((theme_proxy, proxy_url)) => {
+                            let themed_url = themed_vscodium_url(&proxy_url, theme.as_deref());
+                            *slot = Some(VscodiumServer { child, theme_proxy, url: proxy_url, folder: folder.clone() });
+                            return Ok(themed_url);
+                        }
+                        Err(error) => { terminate_process_group(&mut child); return Err(error); }
+                    },
                     Err(error) => { terminate_process_group(&mut child); return Err(error); }
                 },
                 Err(_) => { terminate_process_group(&mut child); return Err(format!("{} did not publish its local URL", program.display())); }
@@ -394,11 +550,24 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let state = handle.state::<VscodiumState>();
-                let _ = ensure_vscodium(&handle, &state, None);
+                let _ = ensure_vscodium(&handle, &state, None, Some("graphite".into()));
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_external_url, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
         .run(tauri::generate_context!())
         .expect("error while running LAW desktop");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::vscodium_theme_name;
+
+    #[test]
+    fn maps_law_theme_ids_to_editor_theme_labels() {
+        assert_eq!(vscodium_theme_name(Some("graphite")), "LAW Graphite");
+        assert_eq!(vscodium_theme_name(Some("light")), "LAW Paper");
+        assert_eq!(vscodium_theme_name(Some("catppuccin-mocha")), "Catppuccin Mocha");
+        assert_eq!(vscodium_theme_name(Some("not-a-theme")), "LAW Graphite");
+    }
 }

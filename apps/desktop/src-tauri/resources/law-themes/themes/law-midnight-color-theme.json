@@ -1,0 +1,25 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "LAW Midnight",
+  "type": "dark",
+  "include": "./night-owl-color-theme.json",
+  "semanticHighlighting": true,
+  "colors": {
+    "editor.background": "#0b1020",
+    "editor.foreground": "#dbe8f5",
+    "editorGroupHeader.tabsBackground": "#080d19",
+    "tab.activeBackground": "#0b1020",
+    "tab.inactiveBackground": "#080d19",
+    "titleBar.activeBackground": "#080d19",
+    "activityBar.background": "#080d19",
+    "sideBar.background": "#080d19",
+    "statusBar.background": "#176b85",
+    "statusBar.foreground": "#ffffff",
+    "panel.background": "#080d19",
+    "terminal.background": "#080d19",
+    "input.background": "#121a2d",
+    "button.background": "#52c7ea",
+    "button.foreground": "#07111d",
+    "focusBorder": "#52c7ea"
+  }
+}

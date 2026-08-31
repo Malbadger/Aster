@@ -15,6 +15,10 @@ if (!wk.stdout.includes("ok")) {
 
 let sourceBuild = run("npm", ["run", "build:all"]);
 if (sourceBuild !== 0) fail("PACKAGE", `production source build failed (exit ${sourceBuild})`);
+let themes = run("npx", ["vsce", "package", "--no-dependencies", "--skip-license", "--allow-missing-repository", "--out", "../law-workbench-themes.vsix"], {
+  cwd: "apps/desktop/src-tauri/resources/law-themes",
+});
+if (themes !== 0) fail("PACKAGE", `LAW editor theme packaging failed (exit ${themes})`);
 let prep = run("node", ["scripts/desktop/prepare-runtime.mjs"]);
 if (prep !== 0) fail("PACKAGE", `runtime preparation failed (exit ${prep})`);
 

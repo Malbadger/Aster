@@ -30,7 +30,11 @@
     "active": true,
     "targets": ["deb", "appimage"],
     "icon": ["icons/icon.png"],
-    "resources": { "../../../packaging/runtime/": "runtime/" },
+    "resources": {
+      "../../../packaging/runtime/": "runtime/",
+      "resources/law-workbench-themes.vsix": "law-workbench-themes.vsix",
+      "resources/vscodium-theme-proxy.mjs": "vscodium-theme-proxy.mjs"
+    },
     "category": "DeveloperTool",
     "shortDescription": "Local Agent Workbench",
     "longDescription": "LAW is a Linux-first open-source desktop workbench for local and remote AI models, optional coding, provider-neutral orchestration, verification, and evidence.",

@@ -57,7 +57,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
           {(["appearance", "providers", "general"] as SettingsTab[]).map((tab) => <button key={tab} type="button" className={props.tab === tab ? "active" : ""} onClick={() => props.onTab(tab)}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
         </nav>
         <main>
-          {props.tab === "appearance" && <section><h2>Color theme</h2><p>Choose a workspace palette. The selection is stored only on this device.</p><div className="theme-grid">
+          {props.tab === "appearance" && <section><h2>Color theme</h2><p>Choose a workspace palette. LAW and its embedded VSCodium editor stay synchronized, and the selection is stored only on this device.</p><div className="theme-grid">
             {THEMES.map((theme) => <button key={theme.id} type="button" className={props.theme === theme.id ? "theme-card selected" : "theme-card"} aria-pressed={props.theme === theme.id} onClick={() => props.onTheme(theme.id)}>
               <span className="theme-swatch">{theme.colors.map((color) => <i key={color} style={{ background: color }} />)}</span><strong>{theme.name}</strong><small>{theme.description}</small>
             </button>)}

@@ -1,0 +1,32 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "LAW High Contrast",
+  "type": "dark",
+  "include": "./monokai-color-theme.json",
+  "semanticHighlighting": true,
+  "colors": {
+    "editor.background": "#000000",
+    "editor.foreground": "#ffffff",
+    "editorGroupHeader.tabsBackground": "#000000",
+    "tab.activeBackground": "#111111",
+    "tab.inactiveBackground": "#000000",
+    "tab.activeBorderTop": "#ffe36e",
+    "titleBar.activeBackground": "#000000",
+    "activityBar.background": "#000000",
+    "activityBar.foreground": "#ffffff",
+    "sideBar.background": "#000000",
+    "sideBar.foreground": "#ffffff",
+    "statusBar.background": "#ffe36e",
+    "statusBar.foreground": "#000000",
+    "panel.background": "#000000",
+    "terminal.background": "#000000",
+    "terminal.foreground": "#ffffff",
+    "input.background": "#111111",
+    "input.foreground": "#ffffff",
+    "button.background": "#ffe36e",
+    "button.foreground": "#000000",
+    "focusBorder": "#ffe36e",
+    "contrastActiveBorder": "#ffe36e",
+    "contrastBorder": "#ffffff"
+  }
+}
