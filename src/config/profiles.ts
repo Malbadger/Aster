@@ -9,7 +9,7 @@
 import type { AuthKind, Locality, ProviderId, ProviderProfile, RunMode } from '../types.js';
 
 export interface ContainerPolicy {
-  /** Engine LAW will require for unattended mutation; 'auto' = detect via doctor. */
+  /** Engine Aster will require for unattended mutation; 'auto' = detect via doctor. */
   engine: 'auto' | 'docker' | 'podman';
   /** Explicit workspace mounts (host path → container path). */
   mounts: Array<{ source: string; target: string; readonly: boolean }>;

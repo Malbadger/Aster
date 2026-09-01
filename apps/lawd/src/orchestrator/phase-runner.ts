@@ -1,7 +1,7 @@
 /**
- * Phase runner port. A phase is a bounded LAW/Pi node: given a locked identity
+ * Phase runner port. A phase is a bounded Aster/Pi node: given a locked identity
  * and a prompt, it yields provider-neutral events. The real implementation binds
- * to LAW Core's PiAdapter (`openSession().submit()`), applying the tool gate as
+ * to Aster Core's PiAdapter (`openSession().submit()`), applying the tool gate as
  * the pre-execution interceptor; the scripted implementation yields canned
  * events for deterministic tests (no provider, no process).
  */

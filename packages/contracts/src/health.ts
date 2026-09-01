@@ -11,7 +11,7 @@ import { defineOperation } from "./ipc.js";
 export const CapabilityState = z.enum(["ready", "missing", "incompatible", "unavailable"]);
 export type CapabilityState = z.infer<typeof CapabilityState>;
 
-/** A probed external capability (LAW Core, Pi, Ollama, Git, container, ...). */
+/** A probed external capability (Aster Core, Pi, Ollama, Git, container, ...). */
 export const CapabilityReport = z.object({
   id: z.string().min(1),
   displayName: z.string().min(1),
@@ -20,7 +20,7 @@ export const CapabilityReport = z.object({
   optional: z.boolean(),
   /** Detected version, when known. Never a credential. */
   detectedVersion: z.string().optional(),
-  /** Minimum version LAW qualified against, when applicable. */
+  /** Minimum version Aster qualified against, when applicable. */
   requiredVersion: z.string().optional(),
   /** Secret-free explanation and, for non-ready states, a recovery hint. */
   detail: z.string(),
@@ -59,7 +59,7 @@ export const daemon_get_health = defineOperation({
 export const daemon_probe_capabilities = defineOperation({
   name: "daemon_probe_capabilities",
   schemaVersion: 1,
-  summary: "Probe LAW Core, Pi, local model endpoints, Git, and container capability.",
+  summary: "Probe Aster Core, Pi, local model endpoints, Git, and container capability.",
   consequential: false,
   request: z.object({ refresh: z.boolean().default(false) }),
   response: CapabilityProbe,

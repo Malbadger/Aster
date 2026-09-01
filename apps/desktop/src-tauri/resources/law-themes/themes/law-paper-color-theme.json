@@ -1,6 +1,6 @@
 {
   "$schema": "vscode://schemas/color-theme",
-  "name": "LAW Paper",
+  "name": "Aster Paper",
   "type": "light",
   "include": "./atom-one-light-color-theme.json",
   "semanticHighlighting": true,

@@ -6,7 +6,7 @@
  * auth METHOD and a non-secret REFERENCE HINT (an env-var name, a command's
  * basename, a broker label) plus a resolved availability STATUS. Credential
  * values are resolved transiently by the daemon at call time and never enter
- * LAW state, UI, logs, evidence, or these contracts (DEC-D-013, REQ-D-013).
+ * Aster state, UI, logs, evidence, or these contracts (DEC-D-013, REQ-D-013).
  *
  * There is no vendor global ban here (DEC-D-016): provider/model restrictions
  * are user/admin policy, applied elsewhere, never a hard-coded denial.

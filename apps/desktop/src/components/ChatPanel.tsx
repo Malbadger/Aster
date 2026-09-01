@@ -33,8 +33,23 @@ function eventColor(kind: ChatEvent["kind"]): string {
   return "var(--law-color-text-muted)";
 }
 
+function eventIdentity(event: ChatEvent, phases: Map<string, { provider: string; model: string }>): { provider: string; model: string } | undefined {
+  const direct = event.data?.identity;
+  if (direct && typeof direct === "object" && "provider" in direct && "model" in direct
+    && typeof direct.provider === "string" && typeof direct.model === "string") {
+    return { provider: direct.provider, model: direct.model };
+  }
+  return event.phaseId ? phases.get(event.phaseId) : undefined;
+}
+
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
+  const phaseIdentities = new Map<string, { provider: string; model: string }>();
+  for (const event of props.events) {
+    if (!event.phaseId) continue;
+    const identity = eventIdentity(event, phaseIdentities);
+    if (identity) phaseIdentities.set(event.phaseId, identity);
+  }
   const conversationalEvents = props.events.filter((event) => event.kind !== "status");
   const visibleEvents = conversationalEvents.filter((event, index) => {
     if (event.kind !== "assistant" || index === 0) return true;
@@ -55,14 +70,16 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
         {visibleEvents.length === 0 && (
           <li className="chat-welcome"><strong>What are we building?</strong><span>Describe a task, open a project, or type /help.</span></li>
         )}
-        {visibleEvents.map((e) => (
-          <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
-            <span className="chat-event-mark" style={{ color: eventColor(e.kind) }} aria-hidden>{e.kind === "user" ? "›" : e.kind === "assistant" ? "LAW" : KIND_LABEL[e.kind] ?? e.kind}</span>
+        {visibleEvents.map((e) => {
+          const identity = e.kind === "assistant" ? eventIdentity(e, phaseIdentities) : undefined;
+          return <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
+            <span className="chat-event-mark" style={{ color: eventColor(e.kind) }} aria-hidden>{e.kind === "user" ? "›" : e.kind === "assistant" ? "Aster" : KIND_LABEL[e.kind] ?? e.kind}</span>
             <span className="chat-event-copy">
               {e.text}
+              {identity && <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>}
             </span>
-          </li>
-        ))}
+          </li>;
+        })}
         {props.interactive && <li className="chat-interactive">{props.interactive}</li>}
         {props.running && <li className="processing" aria-live="polite"><span className="agent-current" aria-hidden><i /><i /><i /></span><span>Thinking</span></li>}
       </ol>

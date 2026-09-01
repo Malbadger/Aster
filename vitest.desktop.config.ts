@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
  * Desktop-side Vitest config. Runs the five desktop workspaces as projects with
  * the right environment each, and resolves `@law/contracts` / `@law/ui` from
  * SOURCE so tests never depend on a prior build step (the failure mode that bit
- * the first Ubuntu run). Invoked only via `--config`, so LAW Core's own runner
+ * the first Ubuntu run). Invoked only via `--config`, so Aster Core's own runner
  * is unaffected.
  */
 const alias = {

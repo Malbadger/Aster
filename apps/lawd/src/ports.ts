@@ -1,7 +1,7 @@
 /**
  * Ports the daemon depends on. Keeping these as narrow interfaces lets the
  * daemon be tested deterministically (fakes) while the real implementations
- * bind to LAW Core and the host. The daemon owns policy; ports never widen it.
+ * bind to Aster Core and the host. The daemon owns policy; ports never widen it.
  */
 import type { CapabilityProbe, ModelDescriptor } from "@law/contracts";
 
@@ -13,7 +13,7 @@ export interface Clock {
 export const systemClock: Clock = { now: () => Date.now() };
 
 /**
- * Capability probe port. The real implementation binds to LAW Core
+ * Capability probe port. The real implementation binds to Aster Core
  * (`createPiAdapter().capabilities()` + `buildDoctorReport`) and host probes
  * (Git, Ollama loopback, container engine). Read-only: never installs anything.
  */
@@ -36,7 +36,7 @@ export const defaultPolicy: PolicyPort = {
 };
 
 /**
- * Model source port. The real implementation binds to LAW Core
+ * Model source port. The real implementation binds to Aster Core
  * (`listOllamaModels` + `capabilities().providers`) and produces provider-neutral
  * descriptors. No model name is hard-coded (DEC-D-016, REQ-D-006).
  */

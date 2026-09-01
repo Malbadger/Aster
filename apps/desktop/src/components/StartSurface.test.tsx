@@ -30,7 +30,7 @@ describe("StartSurface", () => {
 const probe: CapabilityProbe = {
   probedAt: new Date().toISOString(),
   capabilities: [
-    { id: "law-core", displayName: "LAW Core", state: "ready", optional: false, detail: "ok" },
+    { id: "law-core", displayName: "Aster Core", state: "ready", optional: false, detail: "ok" },
     { id: "pi", displayName: "Pi", state: "missing", optional: false, detail: "not installed", recovery: "install Pi" },
     { id: "git", displayName: "Git", state: "ready", optional: true, detail: "git 2.x" },
   ],
@@ -47,7 +47,7 @@ describe("FirstRunSetup", () => {
     const ok: CapabilityProbe = {
       probedAt: probe.probedAt,
       capabilities: [
-        { id: "law-core", displayName: "LAW Core", state: "ready", optional: false, detail: "ok" },
+        { id: "law-core", displayName: "Aster Core", state: "ready", optional: false, detail: "ok" },
         { id: "git", displayName: "Git", state: "unavailable", optional: true, detail: "no git" },
       ],
     };

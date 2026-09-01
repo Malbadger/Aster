@@ -40,7 +40,7 @@ import type {
 
 const TESTED_RANGE = '0.84.4';
 
-/** Preserve Pi-native provider IDs while accepting legacy LAW aliases. */
+/** Preserve Pi-native provider IDs while accepting legacy Aster aliases. */
 function piProviderId(p: ProviderId): string {
   if (p === 'chatgpt') return 'openai-codex';
   if (p === 'claude-pro') return 'anthropic';
@@ -109,7 +109,7 @@ export class PiSdkAdapter implements PiAdapter {
   }
 
   async openSession(spec: SessionSpec): Promise<PiSession> {
-    // Pi owns credentials; LAW never reads values. allowModelNetwork stays false so that
+    // Pi owns credentials; Aster never reads values. allowModelNetwork stays false so that
     // Ollama runs stay loopback-only and no catalog fetch happens implicitly (BN-003).
     const runtime = await ModelRuntime.create({ allowModelNetwork: false });
     if (spec.profile.provider === 'ollama') {
@@ -118,7 +118,7 @@ export class PiSdkAdapter implements PiAdapter {
       // lookup or non-loopback URL is accepted here.
       const model = modelPatternOf(spec);
       runtime.registerProvider('ollama', {
-        name: 'Ollama (local LAW)',
+        name: 'Ollama (local Aster)',
         baseUrl: 'http://127.0.0.1:11434/v1',
         apiKey: 'ollama-local',
         api: 'openai-completions',
@@ -184,7 +184,7 @@ export class PiSdkAdapter implements PiAdapter {
   }
 }
 
-/** The model pattern LAW asks Pi to resolve. Uses profile allowlist first entry, else provider default. */
+/** The model pattern Aster asks Pi to resolve. Uses profile allowlist first entry, else provider default. */
 function modelPatternOf(spec: SessionSpec): string {
   if (spec.requestedModel) {
     const prefix = `${spec.profile.provider}:`;
@@ -309,7 +309,7 @@ function parseToggle(value: string, current: boolean): boolean {
 }
 
 /**
- * Map a Pi AgentSessionEvent into a LAW-normalized event (REQ-002). Recognized event
+ * Map a Pi AgentSessionEvent into a Aster-normalized event (REQ-002). Recognized event
  * `type` names for Pi 0.84.4 are translated; unrecognized events are ignored rather than
  * leaked. Field access is defensive because payloads vary by event type.
  */

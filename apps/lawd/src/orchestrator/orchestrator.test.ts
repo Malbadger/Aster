@@ -62,6 +62,8 @@ describe("Orchestrator", () => {
     const phase = orch.getTask(task.taskId).phases[0]!;
     expect(phase.status).toBe("completed");
     expect(phase.identity).toEqual(IDENTITY);
+    const assistant = events.find((event) => event.kind === "assistant");
+    expect(assistant?.data?.identity).toEqual(IDENTITY);
   });
 
   it("denies a tool that is not on the allowlist (gate enforced before effect)", async () => {
@@ -120,5 +122,13 @@ describe("Orchestrator", () => {
     const tail = orch.getEvents(task.taskId, first.nextSeq);
     expect(tail.events.length).toBe(0);
     expect(tail.nextSeq).toBe(first.nextSeq);
+  });
+
+  it("deletes an inactive chat and all of its stored history", () => {
+    const { orch } = make(new ScriptedRunner());
+    const { task } = orch.createTask({ title: "temporary" });
+    expect(orch.deleteTask(task.taskId)).toEqual({ deleted: true });
+    expect(orch.listTasks("").tasks).toHaveLength(0);
+    expect(() => orch.getEvents(task.taskId, 0)).toThrow(/no such task/);
   });
 });

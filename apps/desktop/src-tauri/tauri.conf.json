@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LAW",
+  "productName": "Aster",
   "version": "0.1.0",
   "identifier": "org.law.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "LAW",
+        "title": "Aster",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -36,8 +36,8 @@
       "resources/vscodium-theme-proxy.mjs": "vscodium-theme-proxy.mjs"
     },
     "category": "DeveloperTool",
-    "shortDescription": "Local Agent Workbench",
-    "longDescription": "LAW is a Linux-first open-source desktop workbench for local and remote AI models, optional coding, provider-neutral orchestration, verification, and evidence.",
+    "shortDescription": "Aster AI Workbench",
+    "longDescription": "Aster is a Linux-first open-source desktop workbench for local and remote AI models, optional coding, provider-neutral orchestration, verification, and evidence.",
     "linux": {
       "deb": { "depends": [] }
     }

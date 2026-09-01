@@ -86,7 +86,7 @@ describe("AboutService (REQ-D-045)", () => {
   it("reports honest limitations and human-only gates", () => {
     const svc = new AboutService("0.1.0-desktop.dev", () => ["Windows/macOS deferred"], () => ["release signing"]);
     const a = svc.get();
-    expect(a.name).toBe("LAW");
+    expect(a.name).toBe("Aster");
     expect(a.limitations).toContain("Windows/macOS deferred");
     expect(a.humanOnlyGates).toContain("release signing");
   });

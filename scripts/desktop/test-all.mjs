@@ -1,5 +1,5 @@
 // TEST PASS total=<n>: desktop workspace tests (contracts, ui, test-fixtures,
-// lawd, desktop) via the dedicated desktop Vitest config. LAW Core keeps its
+// lawd, desktop) via the dedicated desktop Vitest config. Aster Core keeps its
 // own `npm test` (scripts/test.mjs); this runner does not touch it.
 import { runCapture, pass, fail } from "./_lib.mjs";
 import { readFileSync, mkdirSync } from "node:fs";

@@ -4,7 +4,7 @@
  * a memory variant backs tests. Events are secret-scanned by the orchestrator
  * before they reach the store.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, readdirSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { ChatEvent, Phase, Task } from "@law/contracts";
 
@@ -19,6 +19,7 @@ export interface TaskStore {
   getTask(taskId: string): Task | undefined;
   updateTask(task: Task): void;
   listTasks(query: string): Task[];
+  deleteTask(taskId: string): boolean;
   addPhase(phase: Phase): void;
   updatePhase(phase: Phase): void;
   getPhases(taskId: string): Phase[];
@@ -52,6 +53,9 @@ export class MemoryTaskStore implements TaskStore {
       .map((r) => r.task)
       .filter((t) => !q || t.title.toLowerCase().includes(q))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+  deleteTask(taskId: string): boolean {
+    return this.records.delete(taskId);
   }
   addPhase(phase: Phase): void {
     this.rec(phase.taskId).phases.push(phase);
@@ -130,5 +134,11 @@ export class FileTaskStore extends MemoryTaskStore {
   override updatePhase(phase: Phase): void {
     super.updatePhase(phase);
     this.persist(phase.taskId);
+  }
+  override deleteTask(taskId: string): boolean {
+    const deleted = super.deleteTask(taskId);
+    const path = join(this.dir, `${taskId}.json`);
+    if (existsSync(path)) unlinkSync(path);
+    return deleted;
   }
 }

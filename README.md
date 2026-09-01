@@ -1,7 +1,7 @@
-# LAW — Local Agent Workbench
+# Aster — Local Agent Workbench
 
-LAW is a Linux-first desktop workbench and command-line harness for local and
-remote AI models. It combines LAW Core, Pi, Ollama, provider adapters, task
+Aster is a Linux-first desktop workbench and command-line harness for local and
+remote AI models. It combines Aster Core, Pi, Ollama, provider adapters, task
 history, verification, and audit evidence behind one local policy boundary.
 
 > **Status:** pre-release Linux build. Local Ollama operation, packaged desktop
@@ -10,7 +10,7 @@ history, verification, and audit evidence behind one local policy boundary.
 
 ## Quick start
 
-### Install LAW
+### Install Aster
 
 Debian/Ubuntu:
 
@@ -19,7 +19,7 @@ sudo apt install ./LAW_0.1.0_amd64.deb
 law-desktop
 ```
 
-You can also launch **LAW** from the desktop application menu. To uninstall:
+You can also launch **Aster** from the desktop application menu. To uninstall:
 
 ```bash
 sudo apt remove law
@@ -50,7 +50,7 @@ For example:
 ollama pull qwen:latest
 ```
 
-LAW connects to Ollama through `127.0.0.1:11434`. Local models remain usable
+Aster connects to Ollama through `127.0.0.1:11434`. Local models remain usable
 when external network access is unavailable.
 
 ## Operate the desktop application
@@ -88,7 +88,7 @@ Use my selected local model to inspect this project. Then use Claude to audit
 the proposed changes. Summarize the audit and run the local checks.
 ```
 
-Only configured, available providers can run. LAW displays interpreted phases
+Only configured, available providers can run. Aster displays interpreted phases
 and results chronologically. Prompt text cannot grant extra filesystem,
 command, network, or credential permissions.
 
@@ -107,20 +107,20 @@ not prove code was committed, pushed, or deployed.
 ### Stop and resume tasks
 
 Use **Stop** while a task is active to request cancellation. Task history is
-stored locally and displayed separately from the file workspace. Completed LAW
+stored locally and displayed separately from the file workspace. Completed Aster
 checkpoints and evidence survive an application restart, although a live model
 process may not.
 
 ## Provider authentication
 
 Local Ollama requires no credential. Remote authentication belongs to the
-provider or Pi; LAW must not display or store credential values.
+provider or Pi; Aster must not display or store credential values.
 
 The provider-management desktop surface is not yet connected to the main
 navigation. Configure subscription providers through the CLI:
 
 ```bash
-cd /path/to/LAW
+cd /path/to/Aster
 npm ci
 npm run build
 npm link
@@ -132,10 +132,10 @@ law doctor
 ```
 
 Login commands hand control to Pi's provider-owned flow. Never paste API keys,
-OAuth tokens, passwords, or session cookies into a LAW prompt or ordinary
+OAuth tokens, passwords, or session cookies into a Aster prompt or ordinary
 configuration file.
 
-The legacy LAW Core CLI preserves its original owner policy, including its
+The legacy Aster Core CLI preserves its original owner policy, including its
 Claude Max denial. Public desktop provider policy is intended to be
 administrator/user configurable and does not impose that global product rule.
 
@@ -160,7 +160,7 @@ law run \
 
 Add `--mutate` only for an attended coding run. Unattended mutation remains
 blocked unless an approved container engine is available. Pi has no built-in OS
-sandbox; LAW's policy gate is not a substitute for one.
+sandbox; Aster's policy gate is not a substitute for one.
 
 Export redacted evidence:
 
@@ -176,14 +176,14 @@ law --help
 
 ## Codex and Claude Code integration
 
-LAW includes a local stdio MCP server for delegating bounded read-only work to
+Aster includes a local stdio MCP server for delegating bounded read-only work to
 Ollama without sending model weights, checkpoints, or full local transcripts to
 the client conversation.
 
 Build it first:
 
 ```bash
-cd /path/to/LAW
+cd /path/to/Aster
 npm ci
 npm run build
 ```
@@ -193,20 +193,20 @@ Codex configuration:
 ```toml
 [mcp_servers.law_ollama]
 command = "/absolute/path/to/node"
-args = ["/absolute/path/to/LAW/dist/mcp/server.js"]
+args = ["/absolute/path/to/Aster/dist/mcp/server.js"]
 startup_timeout_sec = 30
 
 [mcp_servers.law_ollama.env]
-LAW_PROJECT_ROOT = "/absolute/path/to/LAW"
+LAW_PROJECT_ROOT = "/absolute/path/to/Aster"
 ```
 
 Claude Code registration:
 
 ```bash
 claude mcp add --scope user law-ollama \
-  -e LAW_PROJECT_ROOT=/absolute/path/to/LAW -- \
+  -e LAW_PROJECT_ROOT=/absolute/path/to/Aster -- \
   /absolute/path/to/node \
-  /absolute/path/to/LAW/dist/mcp/server.js
+  /absolute/path/to/Aster/dist/mcp/server.js
 ```
 
 Restart the client after registration. More detail is available in
@@ -220,7 +220,7 @@ Restart the client after registration. More detail is available in
 - Task state and evidence stay local unless explicitly exported or published.
 
 Inspect an evidence bundle for project-specific sensitive information before
-sharing it, even though LAW performs automated redaction.
+sharing it, even though Aster performs automated redaction.
 
 ## Troubleshooting
 
@@ -232,12 +232,12 @@ curl http://127.0.0.1:11434/api/tags
 law doctor
 ```
 
-Start Ollama if its loopback endpoint is unavailable. LAW does not silently
+Start Ollama if its loopback endpoint is unavailable. Aster does not silently
 download models.
 
-### LAW reports degraded status
+### Aster reports degraded status
 
-`degraded` can mean LAW remains usable while an optional capability is absent.
+`degraded` can mean Aster remains usable while an optional capability is absent.
 For example, attended read-only work can run without Docker or Podman, while
 unattended mutation is blocked. Run `law doctor` and follow **next safe
 actions**.
@@ -256,7 +256,7 @@ chmod +x LAW_0.1.0_amd64.AppImage
 
 ### Check versions
 
-The desktop version appears in the upper-right status area. For LAW Core:
+The desktop version appears in the upper-right status area. For Aster Core:
 
 ```bash
 law doctor
@@ -277,7 +277,7 @@ The following areas are incomplete in this pre-release:
 - the private qualification corpus, internal build records, and development
   prompts are intentionally not distributed with the source repository.
 
-Use Git for collaboration between workstations. LAW intentionally does not link
+Use Git for collaboration between workstations. Aster intentionally does not link
 workstations or share live local-agent state.
 
 ## Build from source

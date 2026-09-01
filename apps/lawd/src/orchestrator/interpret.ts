@@ -2,7 +2,7 @@
  * Prompt interpretation (REQ-D-014/015). The same composer accepts natural
  * language and slash commands. The interpretation is returned so the UI can show
  * it in chat before any consequential work. Unknown slash commands are kept
- * intact so Pi can resolve extension commands and prompt templates that LAW
+ * intact so Pi can resolve extension commands and prompt templates that Aster
  * does not know about.
  */
 import type { Interpretation } from "@law/contracts";

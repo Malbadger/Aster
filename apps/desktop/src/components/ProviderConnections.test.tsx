@@ -37,4 +37,18 @@ describe("ProviderConnections", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enable" })); // c2 is disabled
     expect(onSetEnabled).toHaveBeenCalledWith("c2", true);
   });
+
+  it("starts supported account and API-key authentication inside the app", () => {
+    const onAuthenticate = vi.fn();
+    render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop}
+      authProviders={[
+        { id: "anthropic", name: "Anthropic", methods: ["oauth", "api_key"], configured: false },
+        { id: "google", name: "Google", methods: ["api_key"], configured: false },
+      ]} onAuthenticate={onAuthenticate} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign in" })[0]!);
+    expect(onAuthenticate).toHaveBeenCalledWith("anthropic", "oauth");
+    const gemini = screen.getByText("Gemini").closest("article")!;
+    fireEvent.click(gemini.querySelector("button")!);
+    expect(onAuthenticate).toHaveBeenCalledWith("google", "api_key");
+  });
 });

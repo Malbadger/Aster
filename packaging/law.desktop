@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=LAW
-GenericName=Local Agent Workbench
-Comment=Linux-first open-source workbench for local and remote AI models
+Name=Aster
+GenericName=AI Development Workbench
+Comment=Provider-neutral workbench for local and connected AI models
 Exec=law
 Icon=org.law.desktop
 Terminal=false
 Categories=Development;Utility;
-StartupWMClass=LAW
+StartupWMClass=law-desktop
 Keywords=AI;LLM;agent;coding;Ollama;

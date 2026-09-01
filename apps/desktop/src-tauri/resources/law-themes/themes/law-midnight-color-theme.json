@@ -1,6 +1,6 @@
 {
   "$schema": "vscode://schemas/color-theme",
-  "name": "LAW Midnight",
+  "name": "Aster Midnight",
   "type": "dark",
   "include": "./night-owl-color-theme.json",
   "semanticHighlighting": true,

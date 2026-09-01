@@ -147,7 +147,7 @@ export class LawdSocketServer {
     const socketDir = dirname(this.socketPath);
     const created = !existsSync(socketDir);
     mkdirSync(socketDir, { recursive: true, mode: 0o700 });
-    // Only tighten a directory LAW owns; tests and embedders may use /tmp itself.
+    // Only tighten a directory Aster owns; tests and embedders may use /tmp itself.
     if (created || basename(socketDir) === "law") chmodSync(socketDir, 0o700);
     rmSync(this.socketPath, { force: true });
     await new Promise<void>((resolve, reject) => {

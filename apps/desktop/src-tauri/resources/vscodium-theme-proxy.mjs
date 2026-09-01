@@ -5,15 +5,15 @@ import { join } from "node:path";
 const upstream = new URL(process.argv[2] ?? "");
 const themeDirectory = process.argv[3];
 if (upstream.protocol !== "http:" || upstream.hostname !== "127.0.0.1") {
-  throw new Error("LAW VSCodium theme proxy requires a loopback HTTP upstream");
+  throw new Error("Aster VSCodium theme proxy requires a loopback HTTP upstream");
 }
-if (!themeDirectory) throw new Error("LAW VSCodium theme proxy requires its installed theme directory");
+if (!themeDirectory) throw new Error("Aster VSCodium theme proxy requires its installed theme directory");
 
 const themes = {
-  graphite: ["LAW Graphite", "law-graphite-color-theme.json", "dark"],
-  light: ["LAW Paper", "law-paper-color-theme.json", "light"],
-  midnight: ["LAW Midnight", "law-midnight-color-theme.json", "dark"],
-  "high-contrast": ["LAW High Contrast", "law-high-contrast-color-theme.json", "hcDark"],
+  graphite: ["Aster Graphite", "law-graphite-color-theme.json", "dark"],
+  light: ["Aster Paper", "law-paper-color-theme.json", "light"],
+  midnight: ["Aster Midnight", "law-midnight-color-theme.json", "dark"],
+  "high-contrast": ["Aster High Contrast", "law-high-contrast-color-theme.json", "hcDark"],
   dracula: ["Dracula", "dracula-color-theme.json", "dark"],
   "one-dark-pro": ["One Dark Pro", "one-dark-pro-color-theme.json", "dark"],
   monokai: ["Monokai", "monokai-color-theme.json", "dark"],
@@ -56,7 +56,25 @@ function injectTheme(html, themeId) {
     .filter(([, value]) => typeof value === "string")
     .map(([name, value]) => `--vscode-${name.replaceAll(".", "-")}:${value} !important;`)
     .join("");
-  const bootstrapStyle = `<style id="law-vscodium-theme">.monaco-workbench{${variables}}</style>`;
+  const background = editorTheme.colors?.["editor.background"] ?? "#17161a";
+  const foreground = editorTheme.colors?.["editor.foreground"] ?? "#ece9f0";
+  const sidebar = editorTheme.colors?.["sideBar.background"] ?? background;
+  const activity = editorTheme.colors?.["activityBar.background"] ?? sidebar;
+  const tabs = editorTheme.colors?.["editorGroupHeader.tabsBackground"] ?? background;
+  const panel = editorTheme.colors?.["panel.background"] ?? sidebar;
+  const status = editorTheme.colors?.["statusBar.background"] ?? activity;
+  const statusForeground = editorTheme.colors?.["statusBar.foreground"] ?? foreground;
+  const border = editorTheme.colors?.["contrastBorder"] ?? editorTheme.colors?.["panel.border"] ?? "transparent";
+  const bootstrapStyle = `<style id="law-vscodium-theme">
+html,body,.monaco-workbench{background:${background}!important;color:${foreground}}
+.monaco-workbench{${variables}}
+.monaco-workbench .part.activitybar{background-color:${activity}!important}
+.monaco-workbench .part.sidebar{background-color:${sidebar}!important;border-color:${border}!important}
+.monaco-workbench .part.editor,.monaco-workbench .editor-group-container,.monaco-workbench .editor-group-container>.content,.monaco-workbench .monaco-editor,.monaco-workbench .monaco-editor-background,.monaco-workbench .monaco-editor .margin{background-color:${background}!important}
+.monaco-workbench .tabs-and-actions-container,.monaco-workbench .editor-group-container>.title{background-color:${tabs}!important}
+.monaco-workbench .part.panel{background-color:${panel}!important;border-color:${border}!important}
+.monaco-workbench .part.statusbar,.monaco-workbench .part.statusbar .statusbar-item{background-color:${status}!important;color:${statusForeground}!important}
+</style>`;
   return configured.replace("</head>", `${bootstrapStyle}</head>`);
 }
 
@@ -92,13 +110,13 @@ const server = http.createServer((request, response) => {
   });
   outgoing.on("error", (error) => {
     if (!response.headersSent) response.writeHead(502, { "content-type": "text/plain" });
-    response.end(`LAW VSCodium proxy error: ${error.message}`);
+    response.end(`Aster VSCodium proxy error: ${error.message}`);
   });
   request.pipe(outgoing);
 });
 
 server.listen(0, "127.0.0.1", () => {
   const address = server.address();
-  if (!address || typeof address === "string") throw new Error("LAW VSCodium proxy did not bind TCP");
+  if (!address || typeof address === "string") throw new Error("Aster VSCodium proxy did not bind TCP");
   process.stdout.write(`http://127.0.0.1:${address.port}/\n`);
 });

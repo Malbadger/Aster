@@ -3,7 +3,7 @@
 import { LAW_VERSION } from '../version.js';
 
 export function renderHelp(): string {
-  return `LAW for Pi — Local Agent Workbench (law ${LAW_VERSION})
+  return `Aster for Pi — Local Agent Workbench (law ${LAW_VERSION})
 
 USAGE
   law <command> [options]
@@ -12,7 +12,7 @@ COMMANDS
   --help                     Show this help and the safety model
   doctor [--json]            Report runtime, Pi, adapter, provider, container, capability status
   configure                  Choose stable Pi, provider profiles, and policies
-  provider login <id>        Invoke Pi's own login flow (human-only; LAW never sees credentials)
+  provider login <id>        Invoke Pi's own login flow (human-only; Aster never sees credentials)
   run [--workflow <f>]       Validate and execute a workflow
   resume <run>               Inspect a checkpoint and resume a run
   evidence export <run>      Create a redacted, provider-neutral audit bundle
@@ -26,7 +26,7 @@ COMMANDS
   pi rollback [release]      Restore a prior qualified release
 
 SAFETY MODEL (read once)
-  - Pi is the harness. It has NO built-in sandbox. LAW's host tool-interception is a
+  - Pi is the harness. It has NO built-in sandbox. Aster's host tool-interception is a
     policy gate, NOT an OS sandbox — do not treat it as one.
   - Unattended MUTATING work runs only inside an approved container (RULE-003).
   - A provider is chosen BEFORE a run and is immutable during it. Mid-run switching is denied.
@@ -34,7 +34,7 @@ SAFETY MODEL (read once)
     separate authorization.
   - Claude Pro is supported; Claude Max is DENIED by owner policy. Any /claude.*max/i model
     is refused before a provider is contacted.
-  - Pi owns OAuth credentials. LAW never reads, logs, or exports credential values.
+  - Pi owns OAuth credentials. Aster never reads, logs, or exports credential values.
   - No prompt or success message implies production changed before an owner-confirmed promotion.
 
 Run 'law doctor' first to see what is ready or blocked on this machine.`;

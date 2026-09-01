@@ -13,10 +13,11 @@ function client(): IpcClient {
     call: async (op) => {
       switch (op.name) {
         case "daemon_get_health": return { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true };
-        case "daemon_probe_capabilities": return { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "LAW Core", state: "ready", optional: false, detail: "Ready" }] };
+        case "daemon_probe_capabilities": return { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "Aster Core", state: "ready", optional: false, detail: "Ready" }] };
         case "model_list_catalog": return { models: [{ id: "ollama:qwen", displayName: "Qwen:latest", provider: "ollama", locality: "local", availability: "available", effort: { supported: ["low", "medium", "high"] }, capabilities: { tools: true, vision: false } }], favorites: [], recent: [] };
         case "task_list": return { tasks: [] };
         case "provider_list_connections": return { connections: [] };
+        case "provider_auth_methods": return { providers: [] };
         default: throw new Error(`unexpected test operation ${op.name}`);
       }
     },
@@ -26,7 +27,7 @@ function client(): IpcClient {
 describe("App", () => {
   it("boots through the typed client directly into the accessible chat workspace", async () => {
     const { container } = render(<App client={client()} />);
-    expect(screen.getByLabelText("LAW")).toBeInTheDocument();
+    expect(screen.getByLabelText("Aster")).toBeInTheDocument();
     expect(screen.getByTestId("app-version")).toHaveTextContent(DESKTOP_VERSION);
     await screen.findByRole("textbox", { name: "Message" });
     const result = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
@@ -39,10 +40,11 @@ describe("App", () => {
       const { id, op, schemaVersion } = args.request;
       const results: Record<string, unknown> = {
         daemon_get_health: { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true },
-        daemon_probe_capabilities: { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "LAW Core", state: "ready", optional: false, detail: "Ready" }] },
+        daemon_probe_capabilities: { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "Aster Core", state: "ready", optional: false, detail: "Ready" }] },
         model_list_catalog: { models: [], favorites: [], recent: [] },
         task_list: { tasks: [] },
         provider_list_connections: { connections: [] },
+        provider_auth_methods: { providers: [] },
       };
       return { protocol: 1, id, op, schemaVersion, ok: true, result: results[op] };
     });

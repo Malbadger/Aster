@@ -1,5 +1,5 @@
 /**
- * LAW desktop IPC contract core.
+ * Aster desktop IPC contract core.
  *
  * One typed source of truth for every UI <-> daemon operation. Each operation
  * binds a Zod request schema and a Zod response schema to a versioned,

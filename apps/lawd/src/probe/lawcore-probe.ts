@@ -1,12 +1,12 @@
 /**
  * Real capability probe (BUILD-D-003, REQ-D-002).
  *
- * Binds to the existing LAW Core compiled output rather than reimplementing it:
+ * Binds to the existing Aster Core compiled output rather than reimplementing it:
  *   - `createPiAdapter().capabilities()` for Pi/adapter/provider/container/models
  *   - `buildDoctorReport()` for the qualified status taxonomy
- *   - LAW Core's own loopback Ollama probe
+ *   - Aster Core's own loopback Ollama probe
  * plus a Git probe. It performs no install or download and returns the
- * provider-neutral CapabilityProbe contract. It executes only where the LAW
+ * provider-neutral CapabilityProbe contract. It executes only where the Aster
  * Core dist exists on the operator's machine; tests use a fake CapabilityProbePort.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -16,7 +16,7 @@ import type { CapabilityProbe, CapabilityReport } from "@law/contracts";
 import type { CapabilityProbePort } from "../ports.js";
 import { detectGit } from "./git.js";
 
-/** Find the LAW repository root (the package.json named `law-pi`). */
+/** Find the Aster repository root (the package.json named `law-pi`). */
 export function findLawRoot(startDir = process.env.LAW_ROOT ?? process.cwd()): string {
   let dir = resolve(startDir);
   for (let i = 0; i < 12; i += 1) {
@@ -55,11 +55,11 @@ export class LawCoreProbe implements CapabilityProbePort {
     if (!existsSync(coreDist)) {
       capabilities.push({
         id: "law-core",
-        displayName: "LAW Core",
+        displayName: "Aster Core",
         state: "missing",
         optional: false,
-        detail: "LAW Core build output not found",
-        recovery: "run `npm run build` to compile LAW Core (src/ -> dist/)",
+        detail: "Aster Core build output not found",
+        recovery: "run `npm run build` to compile Aster Core (src/ -> dist/)",
       });
       const probe: CapabilityProbe = { probedAt: new Date().toISOString(), capabilities };
       this.cached = probe;
@@ -75,10 +75,10 @@ export class LawCoreProbe implements CapabilityProbePort {
 
     capabilities.push({
       id: "law-core",
-      displayName: "LAW Core",
+      displayName: "Aster Core",
       state: "ready",
       optional: false,
-      detail: `LAW Core available; adapter ${caps.adapter.id}@${caps.adapter.version}`,
+      detail: `Aster Core available; adapter ${caps.adapter.id}@${caps.adapter.version}`,
     });
 
     // Pi runtime.
@@ -128,7 +128,7 @@ export class LawCoreProbe implements CapabilityProbePort {
       ...(ollamaReachable ? {} : { recovery: "start Ollama (or another loopback endpoint) for offline local models" }),
     });
 
-    // Container engine (from LAW Core capabilities).
+    // Container engine (from Aster Core capabilities).
     capabilities.push({
       id: "container",
       displayName: "Container engine",

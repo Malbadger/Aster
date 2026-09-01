@@ -2,7 +2,7 @@
   "name": "law-pi",
   "version": "0.1.0",
   "private": true,
-  "description": "LAW for Pi — Local Agent Workbench: LAW Core plus the Linux-first LAW desktop application.",
+  "description": "Aster for Pi — Local Agent Workbench: Aster Core plus the Linux-first Aster desktop application.",
   "license": "AGPL-3.0-only",
   "type": "module",
   "engines": {

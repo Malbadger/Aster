@@ -16,6 +16,8 @@ describe("AppMenuBar", () => {
     const props = renderMenu();
     expect(screen.getByText("View")).toBeInTheDocument();
     expect(screen.getByText("Terminal")).toBeInTheDocument();
+    expect(screen.queryByText("Go")).toBeNull();
+    expect(screen.queryByText("Selection")).toBeNull();
     fireEvent.click(screen.getByText("File"));
     fireEvent.click(screen.getByRole("menuitem", { name: /New File/ }));
     expect(props.onNewFile).toHaveBeenCalled();

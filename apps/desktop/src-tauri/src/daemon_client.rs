@@ -47,7 +47,7 @@ pub fn relay(request: Value) -> Value {
             return error_envelope(
                 &request,
                 "UNAVAILABLE",
-                "LAW daemon is not running (no handshake file)",
+                "Aster daemon is not running (no handshake file)",
                 "start lawd and retry",
             )
         }
@@ -68,7 +68,7 @@ pub fn relay(request: Value) -> Value {
             return error_envelope(
                 &request,
                 "UNAVAILABLE",
-                "could not connect to the LAW daemon socket",
+                "could not connect to the Aster daemon socket",
                 "start lawd and retry",
             )
         }

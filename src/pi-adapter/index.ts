@@ -1,5 +1,5 @@
 /**
- * PiAdapter public surface for the rest of LAW.
+ * PiAdapter public surface for the rest of Aster.
  * Everything outside src/pi-adapter/** imports from here, never from Pi directly.
  */
 

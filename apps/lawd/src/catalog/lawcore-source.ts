@@ -1,12 +1,12 @@
 /**
- * Real model source (BUILD-D-005). Binds to LAW Core:
+ * Real model source (BUILD-D-005). Binds to Aster Core:
  *   - `listOllamaModels()` for installed local models over loopback
  *   - `listAvailablePiModels()` for concrete Pi models with usable auth
  * and maps both to provider-neutral ModelDescriptors. Providers themselves are
  * never emitted as models. No model name drives
  * logic. Effort support is a conservative neutral default until adapters report
  * per-model effort maps (recorded as a provisional capability, not a silent
- * assumption). Executes where LAW Core `dist/` exists on the operator's machine; tests
+ * assumption). Executes where Aster Core `dist/` exists on the operator's machine; tests
  * use a fake ModelSourcePort.
  */
 import { existsSync } from "node:fs";

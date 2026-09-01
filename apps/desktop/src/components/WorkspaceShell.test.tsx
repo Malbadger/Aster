@@ -30,6 +30,12 @@ describe("WorkspaceShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close bottom panel" }));
     expect(onToggle).toHaveBeenCalledWith("terminal");
   });
+
+  it("exposes keyboard-accessible pane resize handles", () => {
+    render(<WorkspaceShell layout={{ ...DEFAULT_LAYOUT, editor: true, terminal: true }} activePanel="terminal" slots={{ chat: <div>chat</div>, editor: <div>editor</div>, terminal: <div>terminal</div> }} onToggle={() => {}} onPreset={() => {}} onReset={() => {}} />);
+    expect(screen.getByRole("separator", { name: "Resize chat and editor" })).toHaveAttribute("aria-orientation", "vertical");
+    expect(screen.getByRole("separator", { name: "Resize Terminal" })).toHaveAttribute("aria-orientation", "horizontal");
+  });
 });
 
 const staleState: FileState = { path: "a.ts", contentHash: "h2", provenance: "mixed", verification: "stale", verifiedHash: "h1" };

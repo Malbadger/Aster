@@ -1,10 +1,10 @@
 /**
- * @law/lawd — the LAW local daemon.
+ * @law/lawd — the Aster local daemon.
  *
  * The daemon is the sole authority for providers, tools, shell, Git, files,
  * policy, evidence, and credentials. The Tauri shell and React UI reach it only
  * through the typed IPC contracts in @law/contracts over the authenticated
- * local socket. It binds to the existing LAW Core (src/ -> dist/) rather than
+ * local socket. It binds to the existing Aster Core (src/ -> dist/) rather than
  * duplicating it.
  */
 export { buildHealth } from "./health.js";

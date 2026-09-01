@@ -1,4 +1,4 @@
-//! LAW desktop Tauri shell.
+//! Aster desktop Tauri shell.
 //!
 //! The shell owns window lifecycle, secure IPC bootstrap, OS dialogs, update
 //! restart, and narrow native capabilities only. It does NOT execute provider
@@ -101,9 +101,9 @@ fn wait_for_vscodium_http(url: &str, timeout: std::time::Duration) -> Result<(),
 
 fn vscodium_theme_name(theme: Option<&str>) -> &'static str {
     match theme.unwrap_or("graphite") {
-        "light" => "LAW Paper",
-        "midnight" => "LAW Midnight",
-        "high-contrast" => "LAW High Contrast",
+        "light" => "Aster Paper",
+        "midnight" => "Aster Midnight",
+        "high-contrast" => "Aster High Contrast",
         "dracula" => "Dracula",
         "one-dark-pro" => "One Dark Pro",
         "monokai" => "Monokai",
@@ -118,7 +118,7 @@ fn vscodium_theme_name(theme: Option<&str>) -> &'static str {
         "catppuccin-mocha" => "Catppuccin Mocha",
         "synthwave-84" => "Synthwave 84",
         "atom-one-light" => "Atom One Light",
-        _ => "LAW Graphite",
+        _ => "Aster Graphite",
     }
 }
 
@@ -154,17 +154,17 @@ fn spawn_vscodium_theme_proxy(app: &tauri::AppHandle, upstream: &str) -> Result<
     let node = resources.join("runtime/node");
     let script = resources.join("vscodium-theme-proxy.mjs");
     let theme_directory = app.path().app_data_dir().map_err(|error| error.to_string())?
-        .join("vscodium-server/extensions/law.law-workbench-themes-1.1.0/themes");
-    if !node.is_file() || !script.is_file() { return Err("The bundled LAW VSCodium theme proxy is missing".into()); }
-    if !theme_directory.is_dir() { return Err("The installed LAW VSCodium themes are missing".into()); }
+        .join("vscodium-server/extensions/law.law-workbench-themes-1.2.0/themes");
+    if !node.is_file() || !script.is_file() { return Err("The bundled Aster VSCodium theme proxy is missing".into()); }
+    if !theme_directory.is_dir() { return Err("The installed Aster VSCodium themes are missing".into()); }
     let mut command = Command::new(node);
     command.arg(script).arg(upstream).arg(theme_directory)
         .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
     command.process_group(0);
     sanitize_child_environment(&mut command);
-    let mut child = command.spawn().map_err(|error| format!("Could not start LAW VSCodium theme proxy: {error}"))?;
-    let stdout = child.stdout.take().ok_or_else(|| "Could not read LAW VSCodium theme proxy output".to_string())?;
+    let mut child = command.spawn().map_err(|error| format!("Could not start Aster VSCodium theme proxy: {error}"))?;
+    let stdout = child.stdout.take().ok_or_else(|| "Could not read Aster VSCodium theme proxy output".to_string())?;
     let stderr = child.stderr.take();
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -181,35 +181,35 @@ fn spawn_vscodium_theme_proxy(app: &tauri::AppHandle, upstream: &str) -> Result<
         Ok(url) => {
             if let Err(error) = wait_for_vscodium_http(&url, std::time::Duration::from_secs(10)) {
                 terminate_process_group(&mut child);
-                return Err(format!("LAW VSCodium theme proxy failed readiness: {error}"));
+                return Err(format!("Aster VSCodium theme proxy failed readiness: {error}"));
             }
             Ok((child, url))
         }
         Err(_) => {
             terminate_process_group(&mut child);
-            Err("LAW VSCodium theme proxy did not publish its local URL".into())
+            Err("Aster VSCodium theme proxy did not publish its local URL".into())
         }
     }
 }
 
 fn prepare_vscodium_profile(app: &tauri::AppHandle, program: &Path, data_dir: &Path, theme: Option<&str>) -> Result<(), String> {
     let bundled = app.path().resource_dir().map_err(|error| error.to_string())?.join("law-workbench-themes.vsix");
-    if !bundled.is_file() { return Err("The bundled LAW editor themes are missing".into()); }
+    if !bundled.is_file() { return Err("The bundled Aster editor themes are missing".into()); }
 
     let extensions = data_dir.join("extensions");
-    let installed = extensions.join("law.law-workbench-themes-1.1.0/package.json");
+    let installed = extensions.join("law.law-workbench-themes-1.2.0/package.json");
     let registered = std::fs::read_to_string(extensions.join("extensions.json"))
         .map(|contents| contents.contains("law.law-workbench-themes"))
         .unwrap_or(false);
     if !installed.is_file() || !registered {
-        std::fs::create_dir_all(&extensions).map_err(|error| format!("Could not create LAW theme extension directory: {error}"))?;
+        std::fs::create_dir_all(&extensions).map_err(|error| format!("Could not create Aster theme extension directory: {error}"))?;
         let mut install = Command::new(program);
         install.arg("--extensions-dir").arg(&extensions)
             .arg("--install-extension").arg(&bundled).arg("--force");
         sanitize_child_environment(&mut install);
         let output = install.output().map_err(|error| format!("Could not start the VSCodium theme installer: {error}"))?;
         if !output.status.success() {
-            return Err(format!("Could not install LAW editor themes: {}", String::from_utf8_lossy(&output.stderr).trim()));
+            return Err(format!("Could not install Aster editor themes: {}", String::from_utf8_lossy(&output.stderr).trim()));
         }
     }
 
@@ -487,54 +487,6 @@ fn open_terminal(directory: Option<String>) -> Result<String, String> {
     Err("Terminal launching is not supported on this platform".into())
 }
 
-/// Hand provider authentication to LAW Core in an attended terminal. Provider
-/// credentials remain owned by the provider/Pi login flow and never enter UI IPC.
-#[tauri::command]
-fn provider_login(provider: String, directory: Option<String>) -> Result<String, String> {
-    if !provider.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '-') {
-        return Err("Invalid provider identifier".into());
-    }
-    let cwd = safe_directory(directory);
-
-    #[cfg(target_os = "linux")]
-    {
-        let script = format!("law provider login {provider}; printf '\\nPress Enter to close…'; read _");
-        let candidates: [(&str, Vec<&str>); 3] = [
-            ("gnome-terminal", vec!["--", "bash", "-lc", &script]),
-            ("konsole", vec!["-e", "bash", "-lc", &script]),
-            ("x-terminal-emulator", vec!["-e", "bash", "-lc", &script]),
-        ];
-        for (program, args) in candidates {
-            let mut command = Command::new(program);
-            command.args(args);
-            sanitize_child_environment(&mut command);
-            if let Some(path) = &cwd { command.current_dir(path); }
-            if command.spawn().is_ok() { return Ok(program.to_string()); }
-        }
-        return Err("No supported terminal application was found for provider login".into());
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let script = format!("tell application \"Terminal\" to do script \"law provider login {provider}\"");
-        let mut command = Command::new("osascript");
-        command.args(["-e", &script]); sanitize_child_environment(&mut command);
-        command.spawn().map_err(|error| error.to_string())?;
-        return Ok("Terminal".into());
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let command = format!("start powershell.exe -NoExit law provider login {provider}");
-        let mut process = Command::new("cmd"); process.args(["/C", &command]); sanitize_child_environment(&mut process);
-        process.spawn().map_err(|error| error.to_string())?;
-        return Ok("PowerShell".into());
-    }
-
-    #[allow(unreachable_code)]
-    Err("Provider login is not supported on this platform".into())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -544,7 +496,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             daemon_runtime::start(app.handle()).map_err(std::io::Error::other)?;
-            // Start the loopback VSCodium host with LAW itself. This hides the
+            // Start the loopback VSCodium host with Aster itself. This hides the
             // one-time server initialization behind ordinary application use,
             // while the editor command can still retry or switch workspaces.
             let handle = app.handle().clone();
@@ -554,9 +506,9 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_external_url, open_terminal, provider_login, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
+        .invoke_handler(tauri::generate_handler![law_ipc, home_directory, open_external_url, open_terminal, editor_open, vscodium_start, terminal_start, terminal_write, terminal_resize, terminal_stop])
         .run(tauri::generate_context!())
-        .expect("error while running LAW desktop");
+        .expect("error while running Aster desktop");
 }
 
 #[cfg(test)]
@@ -565,9 +517,9 @@ mod tests {
 
     #[test]
     fn maps_law_theme_ids_to_editor_theme_labels() {
-        assert_eq!(vscodium_theme_name(Some("graphite")), "LAW Graphite");
-        assert_eq!(vscodium_theme_name(Some("light")), "LAW Paper");
+        assert_eq!(vscodium_theme_name(Some("graphite")), "Aster Graphite");
+        assert_eq!(vscodium_theme_name(Some("light")), "Aster Paper");
         assert_eq!(vscodium_theme_name(Some("catppuccin-mocha")), "Catppuccin Mocha");
-        assert_eq!(vscodium_theme_name(Some("not-a-theme")), "LAW Graphite");
+        assert_eq!(vscodium_theme_name(Some("not-a-theme")), "Aster Graphite");
     }
 }

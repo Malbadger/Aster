@@ -1,6 +1,6 @@
 {
   "$schema": "vscode://schemas/color-theme",
-  "name": "LAW Graphite",
+  "name": "Aster Graphite",
   "type": "dark",
   "include": "./one-dark-pro-color-theme.json",
   "semanticHighlighting": true,

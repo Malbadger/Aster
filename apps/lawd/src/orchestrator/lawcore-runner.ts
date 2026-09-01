@@ -1,16 +1,16 @@
 /**
- * Real phase runner: binds to LAW Core's PiAdapter. Opens a bounded session with
+ * Real phase runner: binds to Aster Core's PiAdapter. Opens a bounded session with
  * the phase's tools and the daemon's policy gate as the pre-execution
- * interceptor, submits the prompt, and maps LAW Core's provider-neutral
- * `LawEvent`s to `PhaseEvent`s. Abort aborts the session. Executes where LAW Core
+ * interceptor, submits the prompt, and maps Aster Core's provider-neutral
+ * `LawEvent`s to `PhaseEvent`s. Abort aborts the session. Executes where Aster Core
  * `dist/` exists (Ubuntu); deterministic tests use a scripted runner instead.
  */
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
 
-// Minimal shapes of the LAW Core boundary we rely on (kept local to avoid a
-// build-time dependency on LAW Core types).
+// Minimal shapes of the Aster Core boundary we rely on (kept local to avoid a
+// build-time dependency on Aster Core types).
 interface LawEventLike {
   kind: string;
   text?: string;

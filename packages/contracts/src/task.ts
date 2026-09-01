@@ -170,3 +170,12 @@ export const task_cancel = defineOperation({
   request: z.object({ taskId: z.string().min(1) }),
   response: z.object({ taskStatus: TaskStatus, cancellation: CancellationResult }),
 });
+
+export const task_delete = defineOperation({
+  name: "task_delete",
+  schemaVersion: 1,
+  summary: "Permanently delete one inactive local chat and its stored events.",
+  consequential: true,
+  request: z.object({ taskId: z.string().min(1) }),
+  response: z.object({ deleted: z.boolean() }),
+});

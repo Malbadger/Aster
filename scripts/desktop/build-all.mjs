@@ -1,11 +1,11 @@
-// BUILD PASS: build LAW Core, shared packages, daemon, and desktop frontend.
+// BUILD PASS: build Aster Core, shared packages, daemon, and desktop frontend.
 import { run, pass, fail, fileExists } from "./_lib.mjs";
 
 let code = 0;
 
-// LAW Core first (existing dist consumed by lawd), if present.
+// Aster Core first (existing dist consumed by lawd), if present.
 if (fileExists("tsconfig.json")) {
-  console.log("# build LAW Core (src/)");
+  console.log("# build Aster Core (src/)");
   code ||= run("npx", ["tsc", "-p", "tsconfig.json"]);
 }
 

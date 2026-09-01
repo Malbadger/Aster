@@ -1,7 +1,7 @@
 /**
- * The single LAW-owned boundary over Pi (BN-001, REQ-002).
+ * The single Aster-owned boundary over Pi (BN-001, REQ-002).
  *
- * Every Pi-specific operation lives behind this interface. Normal LAW code depends
+ * Every Pi-specific operation lives behind this interface. Normal Aster code depends
  * only on these types — never on `@earendil-works/pi-*` directly. Two implementations
  * exist: `PiSdkAdapter` (real, uses Pi public exports) and `ScriptedPiAdapter`
  * (deterministic fixtures, no provider/process) so the whole graph runs without a model.

@@ -21,7 +21,7 @@ export interface AboutPanelProps {
 
 export function AboutPanel(props: AboutPanelProps): React.JSX.Element {
   return (
-    <section aria-label="About LAW" style={{ padding: 16, maxWidth: 640 }}>
+    <section aria-label="About Aster" style={{ padding: 16, maxWidth: 640 }}>
       <h1 style={{ fontSize: 18, margin: "0 0 2px" }}>{props.about.name}</h1>
       <p style={{ margin: "0 0 12px", color: "var(--law-color-text-muted)" }}>Version {props.about.version}</p>
 

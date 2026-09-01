@@ -1,5 +1,5 @@
 /**
- * Network locality policy (RULE-D-006, REQ-D-009). Mirrors LAW Core
+ * Network locality policy (RULE-D-006, REQ-D-009). Mirrors Aster Core
  * `policy/network.ts` loopback logic, provider-neutral. In local-only mode only
  * loopback endpoints are permitted; a non-loopback target is BLOCKED (not
  * queued). Remote egress requires an explicit, separately authorized action.

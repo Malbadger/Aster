@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
   model_list_catalog, model_set_favorite, task_cancel, task_create,
-  task_get_events, task_list, task_send_message,
+  task_get_events, task_list, task_send_message, task_delete,
   fs_read_file, fs_write_file, verify_run,
   workspace_set_root,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
@@ -27,6 +27,7 @@ import { TaskHistory } from "./components/TaskHistory.js";
 import { WorkspaceShell } from "./components/WorkspaceShell.js";
 import { AuthCard, type AuthProvider } from "./components/AuthCard.js";
 import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, type Panel, type Preset } from "./layout/layout.js";
+import asterMark from "./assets/aster-mark-muted-transparent.svg";
 
 type View = "boot" | "setup" | "start" | "workspace";
 export interface AppProps { client?: IpcClient }
@@ -57,6 +58,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [selectedId, setSelectedId] = React.useState<string>();
   const [effort, setEffort] = React.useState<EffortLevel>("medium");
   const [tasks, setTasks] = React.useState<Task[]>([]);
+  const [taskQuery, setTaskQuery] = React.useState("");
   const [taskId, setTaskId] = React.useState<string>();
   const [conversationKey, setConversationKey] = React.useState(0);
   const [events, setEvents] = React.useState<ChatEvent[]>([]);
@@ -105,6 +107,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     }
   }, [client]);
 
+  const refreshAuthProviders = React.useCallback(async () => {
+    const result = await client.call(provider_auth_methods, {});
+    setAuthProviders(result.providers);
+    return result.providers;
+  }, [client]);
+
   const boot = React.useCallback(async () => {
     setError(undefined); setView("boot");
     try {
@@ -114,13 +122,13 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       const detected = await client.call(daemon_probe_capabilities, { refresh: false });
       setProbe(detected);
       setBootDetail("Loading models and task history…");
-      await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders()]);
+      await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders(), refreshAuthProviders()]);
       const ready = detected.capabilities.filter((capability) => !capability.optional).every((capability) => capability.state === "ready");
       setView(ready ? "workspace" : "setup");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [client, refreshCatalog, refreshProviders, refreshTasks]);
+  }, [client, refreshAuthProviders, refreshCatalog, refreshProviders, refreshTasks]);
 
   React.useEffect(() => { void boot(); }, [boot]);
   React.useEffect(() => { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }, [layout]);
@@ -149,8 +157,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   React.useEffect(() => {
     if (authFlow?.status !== "completed" || refreshedAuthFlow.current === authFlow.flowId) return;
     refreshedAuthFlow.current = authFlow.flowId;
-    void refreshCatalog(query);
-  }, [authFlow?.flowId, authFlow?.status, query, refreshCatalog]);
+    void Promise.all([refreshCatalog(query), refreshAuthProviders()]);
+  }, [authFlow?.flowId, authFlow?.status, query, refreshAuthProviders, refreshCatalog]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
 
   React.useEffect(() => {
@@ -190,12 +198,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   async function startAction(action: StartAction): Promise<void> {
     if (action === "new-chat") return newChat();
     if (action === "open-folder" || action === "new-workspace") {
-      const chosen = await openNativePath({ directory: true, multiple: false, title: action === "open-folder" ? "Open folder in LAW" : "Choose workspace folder" });
+      const chosen = await openNativePath({ directory: true, multiple: false, title: action === "open-folder" ? "Open folder in Aster" : "Choose workspace folder" });
       if (typeof chosen === "string") { await client.call(workspace_set_root, { path: chosen }); setWorkspaceRoot(chosen); newChat(); }
       return;
     }
     if (action === "open-file") {
-      const chosen = await openNativePath({ directory: false, multiple: false, title: "Open file in LAW" });
+      const chosen = await openNativePath({ directory: false, multiple: false, title: "Open file in Aster" });
       if (typeof chosen === "string") {
         const root = chosen.slice(0, Math.max(1, chosen.lastIndexOf("/")));
         await client.call(workspace_set_root, { path: root }); setWorkspaceRoot(root); newChat();
@@ -316,9 +324,20 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
 
-  async function loginProvider(provider: string): Promise<void> {
-    try { await invoke("provider_login", { provider, directory: workspaceRoot }); }
-    catch (cause) { setProviderError(cause instanceof Error ? cause.message : String(cause)); setProviderState("error"); }
+  async function authenticateProvider(provider: string, authType: "oauth" | "api_key"): Promise<void> {
+    try {
+      setProviderError(undefined);
+      setSettingsTab(undefined);
+      setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
+      setAuthOpen(true); setAuthBrowserError(undefined);
+      const result = await client.call(provider_auth_start, { provider, authType });
+      setAuthFlow(result.flow);
+    } catch (cause) {
+      setAuthOpen(false);
+      setProviderError(cause instanceof Error ? cause.message : String(cause));
+      setProviderState("error");
+      setSettingsTab("providers");
+    }
   }
 
   async function addConnection(form: AddConnectionForm): Promise<void> {
@@ -336,6 +355,18 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   async function checkConnection(connectionId: string): Promise<void> {
     await client.call(provider_check_credential, { connectionId }); await refreshProviders();
+  }
+
+  async function deleteChat(id: string): Promise<void> {
+    const task = tasks.find((item) => item.taskId === id);
+    if (!window.confirm(`Delete “${task?.title ?? "this chat"}” and its local message history? This cannot be undone.`)) return;
+    try {
+      await client.call(task_delete, { taskId: id });
+      if (taskId === id) newChat();
+      await refreshTasks();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   }
 
   async function verifyFile(): Promise<void> {
@@ -364,7 +395,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
     editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : undefined)} theme={theme} />,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
-    taskHistory: <TaskHistory tasks={tasks} state={tasks.length ? "ready" : "empty"} query="" onQueryChange={() => {}} onOpen={(id) => void openTask(id)} onExportEvidence={() => {}} onDelete={() => {}} />,
+    taskHistory: <TaskHistory tasks={tasks.filter((task) => task.title.toLowerCase().includes(taskQuery.trim().toLowerCase()))} state={tasks.length ? "ready" : "empty"} query={taskQuery} onQueryChange={setTaskQuery} onOpen={(id) => void openTask(id)} onDelete={(id) => void deleteChat(id)} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,
     problems: <EmptyPanel title="Problems" detail="Diagnostics for the active file appear here." />,
     output: <EmptyPanel title="Output" detail="Checks, tool output, and process status appear here." />,
@@ -399,9 +430,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
-  return <div className="law-app" aria-label="LAW">
+  return <div className="law-app" aria-label="Aster">
     <header className="titlebar">
-      <button className="brand" type="button" onClick={newChat} aria-label="LAW home"><span className="brand-mark">L</span><strong>LAW</strong></button>
+      <button className="brand" type="button" onClick={newChat} aria-label="Aster home"><span className="brand-mark"><img src={asterMark} alt="" /></span><strong>Aster</strong></button>
       <div className="workspace-identity"><span>{view === "workspace" ? tasks.find((task) => task.taskId === taskId)?.title ?? "Workspace" : "Local Agent Workbench"}</span><small>{running ? "Working" : workspaceRoot ?? "Ready"}</small></div>
       <div className="runtime-state"><small data-testid="app-version">v{DESKTOP_VERSION}</small></div>
     </header>
@@ -410,15 +441,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onTogglePanel={toggleSurface} onResetLayout={() => setLayout(resetLayout())} onOpenSettings={(tab) => setSettingsTab(tab)} onOpenTerminal={() => void openSystemTerminal()} />
     {error && <div className="error-banner" role="alert"><span>{error}</span><button type="button" onClick={() => setError(undefined)}>Dismiss</button></div>}
     <div className="app-body">
-      {view === "boot" && <main className="center-stage"><div className="boot-card"><span className="pulse active" aria-hidden /><h1>{error ? "LAW cannot reach its local service" : "Starting LAW"}</h1><p>{error ?? bootDetail}</p>{error && <button className="primary" type="button" onClick={() => void boot()}>Retry connection</button>}</div></main>}
+      {view === "boot" && <main className="center-stage"><div className="boot-card"><span className="pulse active" aria-hidden /><h1>{error ? "Aster cannot reach its local service" : "Starting Aster"}</h1><p>{error ?? bootDetail}</p>{error && <button className="primary" type="button" onClick={() => void boot()}>Retry connection</button>}</div></main>}
       {view === "setup" && probe && <main className="center-stage"><FirstRunSetup probe={probe} onContinue={() => setView("workspace")} onRetry={() => void boot()} /></main>}
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
       {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} onSettings={() => setSettingsTab("appearance")} /></main>}
     </div>
-    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError}
+    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders}
       onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
-      onCheckConnection={(id) => void checkConnection(id)} onLoginProvider={(provider) => void loginProvider(provider)} />}
+      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} />}
   </div>;
 }
 

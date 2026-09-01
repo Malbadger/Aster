@@ -23,7 +23,7 @@ export async function launchPackaged() {
   child.stderr.on("data", (chunk) => { output += String(chunk); });
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline && !existsSync(handshake) && child.exitCode === null) await delay(100);
-  if (!existsSync(handshake)) { stopPackaged(child); throw new Error(`packaged LAW did not create daemon handshake: ${output.slice(-1200)}`); }
+  if (!existsSync(handshake)) { stopPackaged(child); throw new Error(`packaged Aster did not create daemon handshake: ${output.slice(-1200)}`); }
   const info = JSON.parse(readFileSync(handshake, "utf8"));
   child.lawdPid = info.pid;
   try {

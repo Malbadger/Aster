@@ -47,4 +47,12 @@ describe("ChatPanel", () => {
     ]} running={false} onSend={() => {}} onStop={() => {}} />);
     expect(screen.getAllByText("are you running?")).toHaveLength(1);
   });
+
+  it("attributes a model response to the model that produced it", () => {
+    render(<ChatPanel events={[{
+      id: "a", taskId: "t", phaseId: "p", seq: 0, at: "", kind: "assistant", text: "Done.",
+      data: { identity: { provider: "openai-codex", model: "gpt-5.6-sol", effort: "high" } },
+    }]} running={false} onSend={() => {}} onStop={() => {}} />);
+    expect(screen.getByText("gpt-5.6-sol")).toHaveAttribute("title", "Provider: openai-codex");
+  });
 });

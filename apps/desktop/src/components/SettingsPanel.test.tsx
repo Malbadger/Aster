@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { SettingsPanel } from "./SettingsPanel.js";
 
 const base = {
-  tab: "appearance" as const, theme: "graphite" as const, editorEngine: "vscode-oss" as const, connections: [], providerState: "empty" as const,
+  tab: "appearance" as const, theme: "graphite" as const, editorEngine: "vscode-oss" as const, connections: [], providerState: "empty" as const, authProviders: [],
   onTab: vi.fn(), onTheme: vi.fn(), onEditorEngine: vi.fn(), onClose: vi.fn(), onAddConnection: vi.fn(), onRemoveConnection: vi.fn(),
-  onSetConnectionEnabled: vi.fn(), onCheckConnection: vi.fn(), onLoginProvider: vi.fn(),
+  onSetConnectionEnabled: vi.fn(), onCheckConnection: vi.fn(), onAuthenticate: vi.fn(),
 };
 
 describe("SettingsPanel", () => {
@@ -22,8 +22,14 @@ describe("SettingsPanel", () => {
   });
 
   it("shows VSCodium as the sole editor", () => {
-    render(<SettingsPanel {...base} tab="general" />);
+    render(<SettingsPanel {...base} tab="about" />);
     expect(screen.getByText("VSCodium")).toBeInTheDocument();
     expect(screen.queryByText(/Neovim/)).toBeNull();
+  });
+
+  it("labels the product information section About", () => {
+    render(<SettingsPanel {...base} />);
+    expect(screen.getByRole("button", { name: "About" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "General" })).toBeNull();
   });
 });

@@ -74,6 +74,14 @@ export class Orchestrator {
     return { tasks: this.deps.store.listTasks(query) };
   }
 
+  deleteTask(taskId: string): { deleted: boolean } {
+    this.requireTask(taskId);
+    if (this.running.has(taskId)) {
+      throw Object.assign(new Error("Stop this chat before deleting it."), { code: "TASK_ACTIVE" });
+    }
+    return { deleted: this.deps.store.deleteTask(taskId) };
+  }
+
   getTask(taskId: string): { task: Task; phases: Phase[] } {
     const task = this.requireTask(taskId);
     return { task, phases: this.deps.store.getPhases(taskId) };
@@ -192,7 +200,7 @@ export class Orchestrator {
           cancelled = true;
           break;
         }
-        this.recordPhaseEvent(task.taskId, phase.phaseId, ev);
+        this.recordPhaseEvent(task.taskId, phase.phaseId, phase.identity, ev);
         if (ev.kind === "error") lastError = ev.message;
       }
       // The runner may have returned in response to abort without yielding again.
@@ -225,10 +233,10 @@ export class Orchestrator {
     this.running.delete(task.taskId);
   }
 
-  private recordPhaseEvent(taskId: string, phaseId: string, ev: PhaseEvent): void {
+  private recordPhaseEvent(taskId: string, phaseId: string, identity: PhaseIdentity, ev: PhaseEvent): void {
     switch (ev.kind) {
       case "assistant":
-        this.append(taskId, { kind: "assistant", taskId, phaseId, text: ev.text });
+        this.append(taskId, { kind: "assistant", taskId, phaseId, text: ev.text, data: { identity } });
         break;
       case "tool_call":
         this.append(taskId, { kind: "tool_call", taskId, phaseId, text: ev.tool, data: { tool: ev.tool, input: ev.input, callId: ev.callId } });

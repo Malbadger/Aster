@@ -118,6 +118,6 @@ export class AboutService {
     private readonly humanGates: () => string[],
   ) {}
   get(): { name: string; version: string; limitations: string[]; humanOnlyGates: string[] } {
-    return { name: "LAW", version: this.version, limitations: this.limits(), humanOnlyGates: this.humanGates() };
+    return { name: "Aster", version: this.version, limitations: this.limits(), humanOnlyGates: this.humanGates() };
   }
 }

@@ -8,12 +8,13 @@ import type { GitStatus, LogPolicy, RemoteConfirmation, Task } from "@law/contra
 const tasks: Task[] = [{ taskId: "t1", title: "Fix parser", status: "active", createdAt: "", updatedAt: "" }];
 
 describe("TaskHistory", () => {
-  it("is searchable and offers evidence export + delete", () => {
-    const onExport = vi.fn();
-    render(<TaskHistory tasks={tasks} state="ready" query="" onQueryChange={() => {}} onOpen={() => {}} onExportEvidence={onExport} onDelete={() => {}} />);
+  it("is searchable and offers working chat deletion without an inert evidence action", () => {
+    const onDelete = vi.fn();
+    render(<TaskHistory tasks={tasks} state="ready" query="" onQueryChange={() => {}} onOpen={() => {}} onDelete={onDelete} />);
     expect(screen.getByLabelText("Search tasks")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Export evidence for Fix parser" }));
-    expect(onExport).toHaveBeenCalledWith("t1");
+    expect(screen.queryByText("Evidence")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete Fix parser" }));
+    expect(onDelete).toHaveBeenCalledWith("t1");
   });
 });
 

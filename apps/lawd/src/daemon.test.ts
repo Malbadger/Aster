@@ -26,7 +26,7 @@ const fakeProbe: CapabilityProbePort = {
     return {
       probedAt: new Date().toISOString(),
       capabilities: [
-        { id: "law-core", displayName: "LAW Core", state: "ready", optional: false, detail: "ok" },
+        { id: "law-core", displayName: "Aster Core", state: "ready", optional: false, detail: "ok" },
         { id: "git", displayName: "Git", state: "ready", optional: true, detail: "git version 2.x" },
       ],
     };

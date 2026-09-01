@@ -3,8 +3,8 @@ import type { Task } from "@law/contracts";
 
 /**
  * Task history (SURF-D-008, REQ-D-033). A durable, searchable list of tasks,
- * SEPARATE from the file tree. Open / resume / export evidence / delete, with
- * deletion scope disclosed. Status is shown as text, not color alone.
+ * SEPARATE from the file tree. Open / resume / delete, with deletion scope
+ * disclosed by the confirmation in App. Status is shown as text, not color alone.
  */
 export interface TaskHistoryProps {
   tasks: Task[];
@@ -12,7 +12,6 @@ export interface TaskHistoryProps {
   query: string;
   onQueryChange: (q: string) => void;
   onOpen: (taskId: string) => void;
-  onExportEvidence: (taskId: string) => void;
   onDelete: (taskId: string) => void;
 }
 
@@ -33,7 +32,6 @@ export function TaskHistory(props: TaskHistoryProps): React.JSX.Element {
                 <span style={{ fontWeight: 600 }}>{t.title}</span>{" "}
                 <span style={{ fontSize: 11, color: "var(--law-color-text-faint)" }}>({t.status})</span>
               </button>
-              <button type="button" aria-label={`Export evidence for ${t.title}`} onClick={() => props.onExportEvidence(t.taskId)} style={btn()}>Evidence</button>
               <button type="button" aria-label={`Delete ${t.title}`} onClick={() => props.onDelete(t.taskId)} style={btn()}>Delete</button>
             </li>
           ))}

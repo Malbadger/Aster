@@ -4,7 +4,7 @@ import { AboutPanel, type AboutInfo } from "./AboutPanel.js";
 import { applyTheme, nextChoice, type Root } from "../theme/theme.js";
 
 const about: AboutInfo = {
-  name: "LAW",
+  name: "Aster",
   version: "0.1.0-desktop.dev",
   limitations: ["Windows/macOS deferred"],
   humanOnlyGates: ["release signing"],

@@ -1,5 +1,5 @@
 /**
- * LAW design tokens — revised Concept B (OPEN-D-001 provisional default).
+ * Aster design tokens — revised Concept B (OPEN-D-001 provisional default).
  *
  * Direction (03-INTERACTION-DECISIONS): dark warm-charcoal studio, muted
  * teal/coral semantic accents, crisp typography, restrained rounding, compact

@@ -1,8 +1,8 @@
 {
   "name": "law-workbench-themes",
-  "displayName": "LAW Workbench Themes",
-  "description": "Editor palettes synchronized with the LAW desktop application.",
-  "version": "1.1.0",
+  "displayName": "Aster Workbench Themes",
+  "description": "Editor palettes synchronized with the Aster desktop application.",
+  "version": "1.2.0",
   "publisher": "law",
   "files": [
     "themes/**",
@@ -17,22 +17,22 @@
   "contributes": {
     "themes": [
       {
-        "label": "LAW Graphite",
+        "label": "Aster Graphite",
         "uiTheme": "vs-dark",
         "path": "./themes/law-graphite-color-theme.json"
       },
       {
-        "label": "LAW Paper",
+        "label": "Aster Paper",
         "uiTheme": "vs",
         "path": "./themes/law-paper-color-theme.json"
       },
       {
-        "label": "LAW Midnight",
+        "label": "Aster Midnight",
         "uiTheme": "vs-dark",
         "path": "./themes/law-midnight-color-theme.json"
       },
       {
-        "label": "LAW High Contrast",
+        "label": "Aster High Contrast",
         "uiTheme": "hc-black",
         "path": "./themes/law-high-contrast-color-theme.json"
       },

@@ -1,5 +1,6 @@
 import React from "react";
 import type { AuthMethod, ConnLocality, ProviderConnection } from "@law/contracts";
+import type { AuthProvider } from "./AuthCard.js";
 
 /**
  * Provider connections surface (SURF-D-010, REQ-D-010). Provider-neutral:
@@ -23,7 +24,8 @@ export interface ProviderConnectionsProps {
   onRemove: (connectionId: string) => void;
   onSetEnabled: (connectionId: string, enabled: boolean) => void;
   onCheck: (connectionId: string) => void;
-  onLogin?: (provider: string) => void;
+  authProviders?: AuthProvider[];
+  onAuthenticate?: (provider: string, method: "oauth" | "api_key") => void;
 }
 
 const AUTH_METHODS: { value: AuthMethod; label: string }[] = [
@@ -42,10 +44,9 @@ const STATUS_LABEL: Record<ProviderConnection["status"], string> = {
 };
 
 const PROVIDER_PRESETS = [
-  { id: "claude-pro", name: "Claude", detail: "Anthropic account", method: "oauth-device" as const, reference: "" },
-  { id: "chatgpt", name: "ChatGPT", detail: "OpenAI account", method: "oauth-device" as const, reference: "" },
-  { id: "gemini", name: "Gemini", detail: "Google account or API key", method: "env-var" as const, reference: "GEMINI_API_KEY" },
-  { id: "ollama", name: "Ollama", detail: "Local models", method: "none-local" as const, reference: "" },
+  { id: "anthropic", name: "Claude", detail: "Anthropic account or API key", choices: [{ provider: "anthropic", method: "oauth" as const, label: "Sign in" }, { provider: "anthropic", method: "api_key" as const, label: "API key" }] },
+  { id: "openai", name: "ChatGPT / OpenAI", detail: "ChatGPT account or OpenAI API key", choices: [{ provider: "openai-codex", method: "oauth" as const, label: "Sign in" }, { provider: "openai", method: "api_key" as const, label: "API key" }] },
+  { id: "google", name: "Gemini", detail: "Google Gemini API key", choices: [{ provider: "google", method: "api_key" as const, label: "API key" }] },
 ];
 
 export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.Element {
@@ -62,18 +63,22 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
     <section aria-label="Provider connections" className="provider-settings">
       <h1 style={{ fontSize: 18 }}>Providers</h1>
       <p style={{ color: "var(--law-color-text-muted)", marginTop: 0 }}>
-        Connections show status only. LAW never stores or displays credential values.
+        Connect with a provider account where supported, or enter an API key through Pi's secure login flow. Secret values never enter chat history or Aster logs.
       </p>
 
       <div className="provider-presets" aria-label="Provider quick setup">
         {PROVIDER_PRESETS.map((preset) => <article key={preset.id}>
           <span><strong>{preset.name}</strong><small>{preset.detail}</small></span>
-          <button type="button" onClick={() => {
-            const next = { provider: preset.id, label: preset.name, authMethod: preset.method, locality: preset.id === "ollama" ? "local" as const : "remote" as const, reference: preset.reference };
-            setForm(next);
-            if (preset.method === "oauth-device") { props.onAdd(next); props.onLogin?.(preset.id); }
-          }}>{preset.method === "oauth-device" ? "Sign in" : "Configure"}</button>
+          <div className="provider-auth-actions">{preset.choices.map((choice) => {
+            const method = props.authProviders?.find((provider) => provider.id === choice.provider)?.methods.includes(choice.method);
+            return <button key={`${choice.provider}-${choice.method}`} type="button" disabled={!method} title={method ? undefined : "This login method is not available in the installed Pi runtime"}
+              onClick={() => props.onAuthenticate?.(choice.provider, choice.method)}>{choice.label}</button>;
+          })}</div>
         </article>)}
+        <article>
+          <span><strong>Ollama</strong><small>Local models, no account required</small></span>
+          <button type="button" onClick={() => setForm({ provider: "ollama", label: "Ollama", authMethod: "none-local", locality: "local", reference: "" })}>Configure</button>
+        </article>
       </div>
 
       {props.state === "loading" && <p style={{ color: "var(--law-color-text-muted)" }}>Loading…</p>}
@@ -106,6 +111,8 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
         </ul>
       )}
 
+      <h2 className="provider-section-title">Connection policies</h2>
+      <p className="provider-section-copy">Optional routing metadata for local endpoints, environment variables, external credential commands, and enterprise brokers.</p>
       <form
         aria-label="Add connection"
         onSubmit={(e) => {

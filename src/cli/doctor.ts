@@ -130,7 +130,7 @@ const MARK: Record<string, string> = {
 /** Render a text report. `color` currently unused by design: status is carried by text, never color-only (A11y). */
 export function renderDoctorText(r: DoctorReport): string {
   const lines: string[] = [];
-  lines.push(`LAW doctor  ${MARK[r.status]}  (law ${r.law})`);
+  lines.push(`Aster doctor  ${MARK[r.status]}  (law ${r.law})`);
   lines.push(
     `  runtime    ${MARK[r.facets.runtime.status]} node ${r.facets.runtime.node} ${r.facets.runtime.platform}/${r.facets.runtime.arch}`,
   );

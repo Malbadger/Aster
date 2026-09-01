@@ -2,7 +2,7 @@
 /**
  * lawd entry point. Starts the daemon: opens the Unix-domain socket, writes the
  * authenticated handshake, and serves health + capability-probe operations bound
- * to LAW Core. The Tauri shell reads the handshake and connects. No TCP port is
+ * to Aster Core. The Tauri shell reads the handshake and connects. No TCP port is
  * opened and no credential value is ever written to stdout, logs, or handshake.
  */
 import { Daemon } from "./daemon.js";

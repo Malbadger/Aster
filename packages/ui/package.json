@@ -2,7 +2,7 @@
   "name": "@law/ui",
   "version": "0.1.0",
   "private": true,
-  "description": "LAW design system — Concept B tokens and accessible primitives (OPEN-D-001 provisional).",
+  "description": "Aster design system — Concept B tokens and accessible primitives (OPEN-D-001 provisional).",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

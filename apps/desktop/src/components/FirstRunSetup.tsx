@@ -30,9 +30,9 @@ export function FirstRunSetup(props: FirstRunSetupProps): React.JSX.Element {
   const ready = canContinue(props.probe);
   return (
     <section aria-label="First-run setup" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 18 }}>Set up LAW</h1>
+      <h1 style={{ fontSize: 18 }}>Set up Aster</h1>
       <p style={{ color: "var(--law-color-text-muted)", marginTop: 0 }}>
-        LAW checked your machine. Nothing was installed or downloaded.
+        Aster checked your machine. Nothing was installed or downloaded.
       </p>
       <ul role="list" aria-label="Detected capabilities" style={{ listStyle: "none", padding: 0, margin: "12px 0" }}>
         {props.probe.capabilities.map((c) => (

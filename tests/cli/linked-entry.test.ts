@@ -11,7 +11,7 @@ describe('npm-linked CLI entry', () => {
     symlinkSync(resolve('dist/cli/index.js'), link);
     const run = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8' });
     expect(run.status).toBe(0);
-    expect(run.stdout).toContain('LAW for Pi');
+    expect(run.stdout).toContain('Aster for Pi');
     expect(run.stdout).toContain('law doctor');
   });
 });

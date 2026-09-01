@@ -2,7 +2,7 @@
   "name": "@law/lawd",
   "version": "0.1.0",
   "private": true,
-  "description": "LAW local daemon — owns providers, tools, shell, Git, files, policy, evidence, credentials. The UI never bypasses it.",
+  "description": "Aster local daemon — owns providers, tools, shell, Git, files, policy, evidence, credentials. The UI never bypasses it.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {

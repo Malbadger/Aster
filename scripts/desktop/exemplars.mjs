@@ -32,7 +32,7 @@ try {
   const logging = await ipc(launched.info, "log_get_policy", {});
   check(logging.policy.mode === "off" || logging.policy.managed, "EX-D-009 logging is unexpectedly enabled");
   const about = await ipc(launched.info, "about_get", {});
-  check(about.name === "LAW" && about.limitations.length > 0, "EX-D-010 limitations are not visible");
+  check(about.name === "Aster" && about.limitations.length > 0, "EX-D-010 limitations are not visible");
   pass("EXEMPLARS", `total=${total}`);
 } catch (error) { fail("EXEMPLARS", error instanceof Error ? error.message : String(error)); }
 finally { if (launched) stopPackaged(launched.child); }

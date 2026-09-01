@@ -1,7 +1,7 @@
 /**
  * Provider login handoff (REQ-006, SURF-004, EXP-003).
  *
- * LAW never authenticates on the operator's behalf and never touches credential values.
+ * Aster never authenticates on the operator's behalf and never touches credential values.
  * This produces a human-only handoff descriptor pointing at Pi's own login flow.
  */
 
@@ -24,6 +24,6 @@ export function loginHandoff(provider: ProviderId): LoginHandoff {
     provider,
     humanOnly: true,
     piLoginHint: 'pi  (then use Pi’s /login for the selected provider)',
-    message: `Authentication for "${provider}" is owned by Pi and is human-only. LAW will not log in for you and never sees your credentials.${extraUsage}`,
+    message: `Authentication for "${provider}" is owned by Pi and is human-only. Aster will not log in for you and never sees your credentials.${extraUsage}`,
   };
 }

@@ -1,6 +1,6 @@
-# LAW desktop packaging (BUILD-D-022)
+# Aster desktop packaging (BUILD-D-022)
 
-Linux-first packaging for the LAW desktop application. Target: **Ubuntu 24.04 LTS**
+Linux-first packaging for the Aster desktop application. Target: **Ubuntu 24.04 LTS**
 (OPEN-D-002 provisional). Produces an **AppImage** and a **`.deb`** from locked inputs,
 plus **SHA-256** checksums, an **SBOM**, and a license inventory.
 
@@ -30,7 +30,7 @@ npm install
 
 ```bash
 # From the repo root
-npm run build:all          # BUILD PASS  (LAW Core + shared libs + daemon + desktop frontend)
+npm run build:all          # BUILD PASS  (Aster Core + shared libs + daemon + desktop frontend)
 npm run check:all          # CHECK PASS
 npm run desktop:test       # TEST PASS total=<n>
 npm run release:audit      # RELEASE AUDIT PASS (secret scan + SBOM + licenses)

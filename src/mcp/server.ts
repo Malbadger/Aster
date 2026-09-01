@@ -32,7 +32,7 @@ function errorResult(error: unknown) {
     content: [
       {
         type: 'text' as const,
-        text: `LAW local MCP error: ${error instanceof Error ? error.message : String(error)}`,
+        text: `Aster local MCP error: ${error instanceof Error ? error.message : String(error)}`,
       },
     ],
   };
@@ -78,7 +78,7 @@ export function createLawMcpServer(): McpServer {
     {
       title: 'Select Local Ollama Model',
       description:
-        'Selects one installed Ollama model as the default for future LAW MCP runs. Selection applies to new runs only; an existing run keeps its original provider and model lock.',
+        'Selects one installed Ollama model as the default for future Aster MCP runs. Selection applies to new runs only; an existing run keeps its original provider and model lock.',
       inputSchema: {
         model: z.string().min(1).max(200).describe('Exact model name returned by list models.'),
         response_format: formatSchema,
@@ -96,7 +96,7 @@ export function createLawMcpServer(): McpServer {
         return textResult(
           selection as unknown as Record<string, unknown>,
           response_format,
-          `Selected local Ollama model **${selection.model}** for new LAW runs.`,
+          `Selected local Ollama model **${selection.model}** for new Aster runs.`,
         );
       } catch (error) {
         return errorResult(error);
@@ -108,7 +108,7 @@ export function createLawMcpServer(): McpServer {
     'law_ollama_get_selection',
     {
       title: 'Get Selected Local Model',
-      description: 'Returns the Ollama model currently selected for new LAW MCP runs.',
+      description: 'Returns the Ollama model currently selected for new Aster MCP runs.',
       inputSchema: { response_format: formatSchema },
       annotations: {
         readOnlyHint: true,
@@ -133,7 +133,7 @@ export function createLawMcpServer(): McpServer {
     {
       title: 'Start Read-Only Local Ollama Job',
       description:
-        'Starts a background, bounded, read-only LAW/Pi job using Ollama on this device and immediately returns a job ID. Poll law_ollama_get_job for its compact result. The worker cannot write, edit, or execute shell commands.',
+        'Starts a background, bounded, read-only Aster/Pi job using Ollama on this device and immediately returns a job ID. Poll law_ollama_get_job for its compact result. The worker cannot write, edit, or execute shell commands.',
       inputSchema: {
         prompt: z.string().min(1).max(20_000).describe('Clear bounded task for the local worker.'),
         workspace: z.string().min(1).max(4_096).describe('Absolute workspace directory to inspect.'),
@@ -170,7 +170,7 @@ export function createLawMcpServer(): McpServer {
     'law_ollama_get_job',
     {
       title: 'Get Local Ollama Job',
-      description: 'Returns status and, when complete, the compact LAW result for a background local Ollama job.',
+      description: 'Returns status and, when complete, the compact Aster result for a background local Ollama job.',
       inputSchema: {
         job_id: z.string().regex(/^job-[a-zA-Z0-9_-]+$/),
         response_format: formatSchema,
@@ -195,9 +195,9 @@ export function createLawMcpServer(): McpServer {
   server.registerTool(
     'law_ollama_get_run',
     {
-      title: 'Get Local LAW Run',
+      title: 'Get Local Aster Run',
       description:
-        'Reads the latest local checkpoint and compact result for a prior LAW/Ollama run. It does not load the full Pi transcript.',
+        'Reads the latest local checkpoint and compact result for a prior Aster/Ollama run. It does not load the full Pi transcript.',
       inputSchema: {
         run_id: z.string().regex(/^run-[a-zA-Z0-9_-]+$/),
         response_format: formatSchema,
@@ -215,7 +215,7 @@ export function createLawMcpServer(): McpServer {
         return textResult(
           run as unknown as Record<string, unknown>,
           response_format,
-          `# LAW run ${run.run_id}\n\n- Status: ${run.status}\n- Model: ${run.model}\n- Workspace: ${run.workspace}\n\n${run.summary?.text ?? '(no summary)'}`,
+          `# Aster run ${run.run_id}\n\n- Status: ${run.status}\n- Model: ${run.model}\n- Workspace: ${run.workspace}\n\n${run.summary?.text ?? '(no summary)'}`,
         );
       } catch (error) {
         return errorResult(error);
@@ -226,9 +226,9 @@ export function createLawMcpServer(): McpServer {
   server.registerTool(
     'law_ollama_export_evidence',
     {
-      title: 'Export Local LAW Evidence',
+      title: 'Export Local Aster Evidence',
       description:
-        'Creates a redacted local evidence bundle for an existing LAW run and returns its local path and SHA-256 digest.',
+        'Creates a redacted local evidence bundle for an existing Aster run and returns its local path and SHA-256 digest.',
       inputSchema: {
         run_id: z.string().regex(/^run-[a-zA-Z0-9_-]+$/),
         response_format: formatSchema,
@@ -260,7 +260,7 @@ export function createLawMcpServer(): McpServer {
 export async function runStdioServer(): Promise<void> {
   const server = createLawMcpServer();
   await server.connect(new StdioServerTransport());
-  console.error(`LAW MCP server ready (local stdio, root=${LAW_ROOT})`);
+  console.error(`Aster MCP server ready (local stdio, root=${LAW_ROOT})`);
 }
 
 const invokedDirectly = (() => {
@@ -274,7 +274,7 @@ const invokedDirectly = (() => {
 
 if (invokedDirectly) {
   runStdioServer().catch((error) => {
-    console.error(`LAW MCP fatal: ${error instanceof Error ? error.stack : String(error)}`);
+    console.error(`Aster MCP fatal: ${error instanceof Error ? error.stack : String(error)}`);
     process.exit(1);
   });
 }

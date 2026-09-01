@@ -18,7 +18,7 @@ if (sourceBuild !== 0) fail("PACKAGE", `production source build failed (exit ${s
 let themes = run("npx", ["vsce", "package", "--no-dependencies", "--skip-license", "--allow-missing-repository", "--out", "../law-workbench-themes.vsix"], {
   cwd: "apps/desktop/src-tauri/resources/law-themes",
 });
-if (themes !== 0) fail("PACKAGE", `LAW editor theme packaging failed (exit ${themes})`);
+if (themes !== 0) fail("PACKAGE", `Aster editor theme packaging failed (exit ${themes})`);
 let prep = run("node", ["scripts/desktop/prepare-runtime.mjs"]);
 if (prep !== 0) fail("PACKAGE", `runtime preparation failed (exit ${prep})`);
 
@@ -33,7 +33,7 @@ for (const kind of ["deb", "appimage"]) {
   const dir = join(bundleDir, kind);
   if (!existsSync(dir)) continue;
   for (const f of readdirSync(dir)) {
-    if (f.endsWith(".deb") || f.endsWith(".AppImage")) {
+    if (f.startsWith("Aster_") && (f.endsWith(".deb") || f.endsWith(".AppImage"))) {
       const p = join(dir, f);
       const sha = createHash("sha256").update(readFileSync(p)).digest("hex");
       artifacts.push({ path: p, sha256: sha });

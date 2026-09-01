@@ -1,7 +1,7 @@
 /**
  * Container command construction for unattended mutation (REQ-014, RULE-003).
  *
- * LAW never claims isolation it hasn't observed. This module builds the exact engine
+ * Aster never claims isolation it hasn't observed. This module builds the exact engine
  * argv (docker/podman) with declared mounts, network policy, and a non-root identity.
  * A live integration test observes mounts/network/user/exit on a host that has an engine
  * (UAT-013); where no engine exists (e.g., this Builder sandbox) that row is

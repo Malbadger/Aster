@@ -1,4 +1,4 @@
-/** Candidate/output version for the LAW desktop product (SemVer). */
+/** Candidate/output version for the Aster desktop product (SemVer). */
 export const DESKTOP_VERSION = "0.1.0-desktop.dev" as const;
 
 /** Application-data schema version; migrations are transactional (REQ-D-042). */

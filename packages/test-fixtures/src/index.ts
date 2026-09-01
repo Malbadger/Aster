@@ -5,7 +5,7 @@
  * be mistaken for a live provider, credential, or real evidence (04 Forbidden
  * actions). Production code must not import from this package.
  */
-export const FIXTURE_LABEL = "LAW-TEST-FIXTURE" as const;
+export const FIXTURE_LABEL = "Aster-TEST-FIXTURE" as const;
 
 /** Marks a value as fixture-origin for assertions and output labeling. */
 export interface FixtureTagged {

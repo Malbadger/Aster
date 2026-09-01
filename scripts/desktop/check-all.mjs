@@ -1,7 +1,7 @@
 // CHECK PASS: build shared libs (so consumers resolve @law/contracts via dist),
-// then typecheck every desktop workspace with strict TypeScript. LAW Core has
-// its own `npm run check` (Biome + tsc); this desktop gate does not re-lint LAW
-// Core or the desktop workspaces with LAW Core's Biome style — strict tsc is the
+// then typecheck every desktop workspace with strict TypeScript. Aster Core has
+// its own `npm run check` (Biome + tsc); this desktop gate does not re-lint Aster
+// Core or the desktop workspaces with Aster Core's Biome style — strict tsc is the
 // desktop static gate. A desktop-specific Biome/ESLint config can be added later.
 import { run, pass, fail, fileExists } from "./_lib.mjs";
 
@@ -26,9 +26,9 @@ for (const p of projects) {
   code ||= run("npm", ["--workspace", p, "run", "check"]);
 }
 
-// Cross-check that the desktop still compiles against the current LAW Core types.
+// Cross-check that the desktop still compiles against the current Aster Core types.
 if (fileExists("tsconfig.json")) {
-  console.log("\n# typecheck LAW Core (src/)");
+  console.log("\n# typecheck Aster Core (src/)");
   code ||= run("npx", ["tsc", "-p", "tsconfig.json", "--noEmit"]);
 }
 

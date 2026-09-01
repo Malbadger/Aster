@@ -2,7 +2,7 @@
   "name": "@law/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "LAW desktop — shared typed IPC contracts (single source of truth, runtime-validated).",
+  "description": "Aster desktop — shared typed IPC contracts (single source of truth, runtime-validated).",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

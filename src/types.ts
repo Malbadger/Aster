@@ -1,7 +1,7 @@
 /**
- * Core LAW-owned domain types.
+ * Core Aster-owned domain types.
  *
- * These types are the vocabulary LAW controls. Pi's own types never leak past the
+ * These types are the vocabulary Aster controls. Pi's own types never leak past the
  * PiAdapter boundary (REQ-002); everything the graph, policy, and evidence layers
  * see is defined here.
  */
@@ -19,7 +19,7 @@ export type ProviderId = string;
 
 export type Locality = 'local' | 'any';
 
-/** How a provider authenticates. LAW never handles credential values (BN-011). */
+/** How a provider authenticates. Aster never handles credential values (BN-011). */
 export type AuthKind = 'none' | 'subscription-oauth';
 
 /** Run host modes (REQ-011). */

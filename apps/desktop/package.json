@@ -2,7 +2,7 @@
   "name": "@law/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "LAW desktop shell — Tauri 2 + React/TypeScript. Presentation and input only; all effects go through lawd.",
+  "description": "Aster desktop shell — Tauri 2 + React/TypeScript. Presentation and input only; all effects go through lawd.",
   "type": "module",
   "scripts": {
     "dev": "vite",

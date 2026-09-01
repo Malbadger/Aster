@@ -187,7 +187,7 @@ export function getLocalJob(
   jobId: string,
 ): LocalJob {
   const path = jobPath(lawRoot, jobId);
-  if (!existsSync(path)) throw new Error(`No local LAW job found for ${jobId}.`);
+  if (!existsSync(path)) throw new Error(`No local Aster job found for ${jobId}.`);
   return JSON.parse(readFileSync(path, 'utf8')) as LocalJob;
 }
 
@@ -222,7 +222,7 @@ export async function runLocalReadOnly(
     );
     const output = [...capture.stdout, ...capture.stderr].join('\n');
     const runId = /\brun=(run-[a-zA-Z0-9_-]+)/.exec(output)?.[1];
-    if (code !== 0 || !runId) throw new Error(output || `LAW run failed with exit code ${code}.`);
+    if (code !== 0 || !runId) throw new Error(output || `Aster run failed with exit code ${code}.`);
     return getLocalRun(lawRoot, runId);
   } finally {
     process.chdir(originalCwd);
@@ -231,7 +231,7 @@ export async function runLocalReadOnly(
 
 export function getLocalRun(lawRoot: string, runId: string): LocalRunResult {
   const checkpoint = readLatestCheckpoint(join(lawRoot, 'work', 'runs'), runId);
-  if (!checkpoint) throw new Error(`No LAW checkpoint found for run ${runId}.`);
+  if (!checkpoint) throw new Error(`No Aster checkpoint found for run ${runId}.`);
   const config = checkpoint.state.data.runConfig as
     | { model?: string; workspace?: string }
     | undefined;

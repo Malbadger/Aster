@@ -1,4 +1,4 @@
-// Shared helpers for LAW desktop orchestration scripts.
+// Shared helpers for Aster desktop orchestration scripts.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 

@@ -1,5 +1,5 @@
 /**
- * LAW daemon (lawd).
+ * Aster daemon (lawd).
  *
  * Owns the contract registry, the dispatcher, and the socket server. Registers
  * the operation handlers for its current phase and reports which contracted
@@ -26,6 +26,7 @@ import {
   task_send_message,
   task_get_events,
   task_cancel,
+  task_delete,
   fs_read_file,
   fs_write_file,
   verify_run,
@@ -215,6 +216,10 @@ export class Daemon {
     this.dispatcher.handle(task_cancel.name, async (payload) => {
       const { taskId } = payload as { taskId: string };
       return this.orchestrator.cancel(taskId);
+    });
+    this.dispatcher.handle(task_delete.name, (payload) => {
+      const { taskId } = payload as { taskId: string };
+      return this.orchestrator.deleteTask(taskId);
     });
 
     this.dispatcher.handle(fs_read_file.name, (payload) => {

@@ -83,7 +83,7 @@ export class CredentialBroker {
       }
 
       case "oauth-device":
-        // Interactive login is human-only; LAW records only whether a session exists.
+        // Interactive login is human-only; Aster records only whether a session exists.
         return this.hasOauthSession(conn.connectionId) ? "available" : "absent";
 
       default:
