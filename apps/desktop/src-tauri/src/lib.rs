@@ -323,6 +323,13 @@ fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, direct
         let home = std::env::var("HOME").unwrap_or_default();
         let local = Path::new(&home).join(".local/bin/agy");
         if local.is_file() { CommandBuilder::new(local) } else { CommandBuilder::new("agy") }
+    } else if program.as_deref() == Some("claude") {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let local = Path::new(&home).join(".local/bin/claude");
+        let mut claude = if local.is_file() { CommandBuilder::new(local) } else { CommandBuilder::new("claude") };
+        claude.arg("auth");
+        claude.arg("login");
+        claude
     } else {
         let shell = std::env::var("SHELL").ok().filter(|value| Path::new(value).is_absolute()).unwrap_or_else(|| "/bin/bash".into());
         CommandBuilder::new(shell)

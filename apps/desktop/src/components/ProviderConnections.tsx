@@ -25,6 +25,7 @@ export interface ProviderConnectionsProps {
   geminiCli?: GeminiCliStatusView;
   onAuthenticate?: (provider: string, method: "oauth" | "api_key") => void;
   onGeminiCliLogin?: () => void;
+  onClaudeCodeLogin?: () => void;
 }
 
 type EndpointDraft = {
@@ -40,7 +41,6 @@ const EMPTY_ENDPOINT: EndpointDraft = {
 };
 
 const PROVIDER_PRESETS = [
-  { id: "anthropic", name: "Claude", detail: "Anthropic account or API key", choices: [{ provider: "anthropic", method: "oauth" as const, label: "Sign in" }, { provider: "anthropic", method: "api_key" as const, label: "API key" }] },
   { id: "openai", name: "ChatGPT / OpenAI", detail: "ChatGPT account or OpenAI API key", choices: [{ provider: "openai-codex", method: "oauth" as const, label: "Sign in" }, { provider: "openai", method: "api_key" as const, label: "API key" }] },
   { id: "xai", name: "Grok / xAI", detail: "SuperGrok, X Premium, or xAI API key", choices: [{ provider: "xai", method: "oauth" as const, label: "Sign in" }, { provider: "xai", method: "api_key" as const, label: "API key" }] },
   { id: "github-copilot", name: "GitHub Copilot", detail: "GitHub account or Copilot token", choices: [{ provider: "github-copilot", method: "oauth" as const, label: "Sign in" }, { provider: "github-copilot", method: "api_key" as const, label: "Token" }] },
@@ -69,6 +69,13 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
     <p className="provider-intro">Connect an account, enter an API key through a provider-owned flow, or add any compatible local or enterprise endpoint. Secret values never enter chat history or Aster logs.</p>
 
     <div className="provider-presets" aria-label="Provider quick setup">
+      <article>
+        <span><strong>Claude</strong><small>Official Claude Code CLI or Anthropic API key</small></span>
+        <div className="provider-auth-actions">
+          <button type="button" onClick={props.onClaudeCodeLogin}>Claude Code sign in</button>
+          <button type="button" disabled={!props.authProviders?.find((provider) => provider.id === "anthropic")?.methods.includes("api_key")} onClick={() => props.onAuthenticate?.("anthropic", "api_key")}>API key</button>
+        </div>
+      </article>
       {PROVIDER_PRESETS.map((preset) => <article key={preset.id}>
         <span><strong>{preset.name}</strong><small>{preset.detail}</small></span>
         <div className="provider-auth-actions">{preset.choices.map((choice) => {

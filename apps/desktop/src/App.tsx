@@ -29,6 +29,7 @@ import { TaskHistory } from "./components/TaskHistory.js";
 import { WorkspaceShell } from "./components/WorkspaceShell.js";
 import { AuthCard, type AuthProvider } from "./components/AuthCard.js";
 import { GeminiCliLogin } from "./components/GeminiCliLogin.js";
+import { ClaudeCodeLogin } from "./components/ClaudeCodeLogin.js";
 import type { GeminiCliStatusView } from "./components/ProviderConnections.js";
 import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, type Panel, type Preset } from "./layout/layout.js";
 import asterMark from "./assets/aster-mark-muted-transparent.svg";
@@ -91,6 +92,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [authBrowserError, setAuthBrowserError] = React.useState<string>();
   const [geminiCli, setGeminiCli] = React.useState<GeminiCliStatusView>();
   const [geminiLoginOpen, setGeminiLoginOpen] = React.useState(false);
+  const [claudeLoginOpen, setClaudeLoginOpen] = React.useState(false);
   const [attachments, setAttachments] = React.useState<AttachmentDescriptor[]>([]);
   const [attachmentBusy, setAttachmentBusy] = React.useState(false);
   const [remoteAttachmentConfirm, setRemoteAttachmentConfirm] = React.useState<{ names: string[]; resolve: (allowed: boolean) => void }>();
@@ -278,6 +280,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       if (name === "login") {
         local("user", text);
         if (["gemini", "gemini-cli", "google"].includes(args.toLowerCase())) { startGeminiCliLogin(); return; }
+        if (["claude", "claude-code", "claude-pro", "anthropic"].includes(args.toLowerCase())) { startClaudeCodeLogin(); return; }
         const result = await client.call(provider_auth_methods, {}); setAuthProviders(result.providers); setAuthOpen(true); setAuthFlow(undefined);
         const requested = args.toLowerCase() === "claude-pro" ? "anthropic" : ["chatgpt", "openai"].includes(args.toLowerCase()) ? "openai-codex" : args.toLowerCase();
         const provider = requested && result.providers.find((item) => item.id === requested);
@@ -437,6 +440,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     setAuthOpen(false); setGeminiLoginOpen(true);
   }
 
+  function startClaudeCodeLogin(): void {
+    setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
+    setAuthOpen(false); setGeminiLoginOpen(false); setClaudeLoginOpen(true);
+  }
+
   async function finishGeminiCliLogin(): Promise<void> {
     setGeminiLoginOpen(false);
     await Promise.all([refreshGeminiCli(), refreshCatalog(query)]);
@@ -492,7 +500,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onBeforeSend={approveRemoteAttachmentSend} onSend={(text) => void send(text)} onStop={() => void stop()} onRespondApproval={(approvalId, approved) => {
       if (!taskId) return;
       void client.call(task_respond_approval, { taskId, approvalId, approved }).then(async () => setEvents((await client.call(task_get_events, { taskId, sinceSeq: 0 })).events));
-    }} controls={controls} composerNotice={remoteAttachmentConfirm ? <div className="attachment-disclosure" role="alert"><strong>Send local files to {selected?.displayName}?</strong><span>{remoteAttachmentConfirm.names.join(", ")} will leave this device for this message.</span><div><button type="button" onClick={() => { attachmentEgressApproved.current = false; remoteAttachmentConfirm.resolve(false); setRemoteAttachmentConfirm(undefined); }}>Keep local</button><button className="primary" type="button" onClick={() => { attachmentEgressApproved.current = true; remoteAttachmentConfirm.resolve(true); setRemoteAttachmentConfirm(undefined); }}>Send files</button></div></div> : undefined} interactive={geminiLoginOpen
+    }} controls={controls} composerNotice={remoteAttachmentConfirm ? <div className="attachment-disclosure" role="alert"><strong>Send local files to {selected?.displayName}?</strong><span>{remoteAttachmentConfirm.names.join(", ")} will leave this device for this message.</span><div><button type="button" onClick={() => { attachmentEgressApproved.current = false; remoteAttachmentConfirm.resolve(false); setRemoteAttachmentConfirm(undefined); }}>Keep local</button><button className="primary" type="button" onClick={() => { attachmentEgressApproved.current = true; remoteAttachmentConfirm.resolve(true); setRemoteAttachmentConfirm(undefined); }}>Send files</button></div></div> : undefined} interactive={claudeLoginOpen
+      ? <ClaudeCodeLogin directory={workspaceRoot} onDone={() => { setClaudeLoginOpen(false); void refreshCatalog(query); }} onCancel={() => setClaudeLoginOpen(false)} />
+      : geminiLoginOpen
       ? <GeminiCliLogin directory={workspaceRoot} onDone={() => void finishGeminiCliLogin()} onCancel={() => setGeminiLoginOpen(false)} />
       : authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
       onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
@@ -554,7 +564,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli}
       onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
-      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} />}
+      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} onClaudeCodeLogin={startClaudeCodeLogin} />}
   </div>;
 }
 

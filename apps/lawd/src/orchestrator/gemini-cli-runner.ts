@@ -82,8 +82,11 @@ export class AntigravityPhaseRunner implements PhaseRunner {
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const selected = req.identity.model.startsWith('antigravity:') ? req.identity.model.slice('antigravity:'.length) : req.identity.model;
-    const args = ['-p', promptWithAttachments(req, true), '--output-format', 'stream-json', '--effort', normalizeEffort(req.identity.effort)];
+    const args = ['-p', promptWithAttachments(req, true), '--output-format', 'stream-json'];
     if (selected && selected !== 'auto') args.push('--model', selected);
+    // Antigravity's concrete catalog IDs already encode effort (for example
+    // gemini-3.6-flash-low). Passing --effort as well is rejected by the CLI.
+    if (!selected || selected === 'auto' || !modelEncodesEffort(selected)) args.push('--effort', normalizeEffort(req.identity.effort));
     const prior = this.conversations.get(req.taskId);
     if (prior) args.push('--conversation', prior);
     const mode = req.identity.mode ?? 'manual';
@@ -105,13 +108,18 @@ export class AntigravityPhaseRunner implements PhaseRunner {
         if (!line.trim()) continue;
         let event: Record<string, any>;
         try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
-        const conversationId = event.conversation_id ?? event.conversationId;
+        // Current Antigravity JSONL wraps payloads under their event name;
+        // accept the older flat shape as well so upgrades remain compatible.
+        const eventType = event.event ?? event.type;
+        const step = event.step_update ?? event;
+        const result = event.result ?? event;
+        const conversationId = event.conversation_id ?? event.conversationId ?? event.init?.conversation_id ?? step.conversation_id ?? result.conversation_id;
         if (typeof conversationId === 'string') this.conversations.set(req.taskId, conversationId);
-        if (event.type === 'step_update' && event.step_type === 'agent_response') assistant += String(event.text_delta ?? event.text ?? '');
-        if (event.type === 'step_update' && event.step_type === 'tool_call') yield { kind: 'tool_call', tool: String(event.tool_name ?? event.name ?? 'antigravity-tool'), input: event.parameters ?? event.input, callId: String(event.tool_call_id ?? event.id ?? '') };
-        if (event.type === 'step_update' && event.step_type === 'tool_result') yield { kind: 'tool_result', tool: String(event.tool_name ?? 'antigravity-tool'), ok: !event.error, summary: String(event.output ?? event.error ?? ''), callId: String(event.tool_call_id ?? event.id ?? '') };
-        if (event.type === 'result' && event.status === 'error') fatal = String(event.error?.message ?? event.message ?? 'Antigravity CLI run failed');
-        if (event.type === 'result' && !assistant && typeof event.response === 'string') assistant = event.response;
+        if (eventType === 'step_update' && step.step_type === 'agent_response') assistant += String(step.text_delta ?? step.text ?? '');
+        if (eventType === 'step_update' && step.step_type === 'tool_call') yield { kind: 'tool_call', tool: String(step.tool_name ?? step.name ?? 'antigravity-tool'), input: step.parameters ?? step.input, callId: String(step.tool_call_id ?? step.id ?? '') };
+        if (eventType === 'step_update' && step.step_type === 'tool_result') yield { kind: 'tool_result', tool: String(step.tool_name ?? 'antigravity-tool'), ok: !step.error, summary: String(step.output ?? step.error ?? ''), callId: String(step.tool_call_id ?? step.id ?? '') };
+        if (eventType === 'result' && String(result.status).toLowerCase() === 'error') fatal = errorMessage(result.error) ?? String(result.message ?? 'Antigravity CLI run failed');
+        if (eventType === 'result' && !assistant && typeof result.response === 'string') assistant = result.response;
       }
       const exit = await exitPromise;
       if (req.signal.aborted) return;
@@ -130,10 +138,28 @@ function normalizeEffort(effort: string): 'low' | 'medium' | 'high' {
   return 'medium';
 }
 
+function modelEncodesEffort(model: string): boolean { return /-(?:low|medium|high|xhigh|max)$/i.test(model); }
+
+function errorMessage(error: unknown): string | undefined {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message;
+  return undefined;
+}
+
 /** Routes a phase to a provider-specific runner without leaking that choice into graph state. */
 export class ProviderPhaseRunner implements PhaseRunner {
-  constructor(private readonly pi: PhaseRunner, private readonly gemini: PhaseRunner, private readonly antigravity: PhaseRunner = gemini) {}
+  constructor(
+    private readonly pi: PhaseRunner,
+    private readonly gemini: PhaseRunner,
+    private readonly antigravity: PhaseRunner = gemini,
+    private readonly claudeCode: PhaseRunner = pi,
+  ) {}
   run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
-    return (req.identity.provider === 'gemini-cli' ? this.gemini : req.identity.provider === 'antigravity' ? this.antigravity : this.pi).run(req);
+    return (
+      req.identity.provider === 'gemini-cli' ? this.gemini
+      : req.identity.provider === 'antigravity' ? this.antigravity
+      : req.identity.provider === 'anthropic' ? this.claudeCode
+      : this.pi
+    ).run(req);
   }
 }

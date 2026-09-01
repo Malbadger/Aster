@@ -6,7 +6,8 @@ import type { ChatEvent } from "@law/contracts";
 const events: ChatEvent[] = [
   { id: "e1", taskId: "t", seq: 0, at: "", kind: "user", text: "read a.ts" },
   { id: "e2", taskId: "t", seq: 1, at: "", kind: "assistant", text: "I’ll inspect it." },
-  { id: "e3", taskId: "t", seq: 2, at: "", kind: "tool_denied", text: "tool not allowed" },
+  { id: "e3", taskId: "t", seq: 2, at: "", kind: "tool_denied", text: "tool not allowed", data: { callId: "c1" } },
+  { id: "e4", taskId: "t", seq: 3, at: "", kind: "tool_result", text: "duplicate denial result", data: { callId: "c1", ok: false } },
 ];
 
 describe("ChatPanel", () => {
@@ -14,7 +15,9 @@ describe("ChatPanel", () => {
     render(<ChatPanel events={events} running={false} onSend={() => {}} onStop={() => {}} />);
     const items = screen.getByRole("list", { name: "Conversation" }).querySelectorAll("li");
     expect(items).toHaveLength(3);
-    expect(screen.getByText("Denied")).toBeInTheDocument();
+    expect(screen.getByText("Guard")).toBeInTheDocument();
+    expect(screen.getByText("Aster blocked one background action")).toBeInTheDocument();
+    expect(screen.queryByText("duplicate denial result")).toBeNull();
   });
 
   it("sends a message and clears the composer", () => {
@@ -54,6 +57,16 @@ describe("ChatPanel", () => {
       data: { identity: { provider: "openai-codex", model: "gpt-5.6-sol", effort: "high" } },
     }]} running={false} onSend={() => {}} onStop={() => {}} />);
     expect(screen.getByText("gpt-5.6-sol")).toHaveAttribute("title", "Provider: openai-codex");
+  });
+
+  it("marks official Claude responses without exposing the bridge shell", () => {
+    render(<ChatPanel events={[{
+      id: "claude", taskId: "t", phaseId: "p", seq: 0, at: "", kind: "assistant", text: "Reviewed.",
+      data: { identity: { provider: "anthropic", model: "claude-sonnet-4-6", effort: "medium" } },
+    }]} running={false} onSend={() => {}} onStop={() => {}} />);
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("claude-sonnet-4-6").closest("small")).toHaveAttribute("title", "Official Claude Code · claude-sonnet-4-6");
+    expect(screen.queryByText(/claude -p/)).toBeNull();
   });
 
   it("shows attachment chips, removes them, and waits for send preflight", async () => {

@@ -49,21 +49,34 @@ describe("GeminiCliPhaseRunner", () => {
     expect(invocations[0]).toContain("plan");
   });
 
-  it("runs Antigravity JSONL with the selected model, effort, and permission mode", async () => {
+  it("runs current Antigravity JSONL without a conflicting effort flag", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aster-antigravity-runner-"));
     const argvLog = join(dir, "argv.json");
     const executable = join(dir, "agy");
     writeFileSync(executable, `#!/usr/bin/env node
       require('node:fs').writeFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)));
-      console.log(JSON.stringify({type:'init', conversation_id:'conversation-1'}));
-      console.log(JSON.stringify({type:'step_update', step_type:'agent_response', text_delta:'Ready.'}));
-      console.log(JSON.stringify({type:'result', status:'success'}));
+      console.log(JSON.stringify({event:'init', conversation_id:'conversation-1', init:{model:'gemini-3.6-flash-low'}}));
+      console.log(JSON.stringify({event:'step_update', step_update:{conversation_id:'conversation-1', step_type:'agent_response', text_delta:'Ready.'}}));
+      console.log(JSON.stringify({event:'result', result:{conversation_id:'conversation-1', status:'SUCCESS', response:'Ready.'}}));
     `);
     chmodSync(executable, 0o755);
-    const req = { ...request("agy-task"), identity: { provider: "antigravity", model: "antigravity:gemini-code", effort: "high", mode: "auto" } as const };
+    const req = { ...request("agy-task"), identity: { provider: "antigravity", model: "antigravity:gemini-3.6-flash-low", effort: "high", mode: "auto" } as const };
     expect(await collect(new AntigravityPhaseRunner(executable), req)).toEqual([{ kind: "assistant", text: "Ready." }, { kind: "settled" }]);
     const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
-    expect(args).toEqual(expect.arrayContaining(["--model", "gemini-code", "--effort", "high", "--mode=accept-edits"]));
+    expect(args).toEqual(expect.arrayContaining(["--model", "gemini-3.6-flash-low", "--mode=accept-edits"]));
+    expect(args).not.toContain("--effort");
+  });
+
+  it("surfaces current Antigravity result errors instead of a generic exit code", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-antigravity-error-"));
+    const executable = join(dir, "agy");
+    writeFileSync(executable, `#!/usr/bin/env node
+      console.log(JSON.stringify({event:'result', result:{status:'ERROR', error:'model conflicts with effort'}}));
+      process.exitCode = 1;
+    `);
+    chmodSync(executable, 0o755);
+    const req = { ...request("agy-error"), identity: { provider: "antigravity", model: "antigravity:auto", effort: "medium" } as const };
+    expect(await collect(new AntigravityPhaseRunner(executable), req)).toEqual([{ kind: "error", message: "model conflicts with effort" }]);
   });
 
   it("turns CLI failures into provider-neutral error events", async () => {
@@ -75,8 +88,9 @@ describe("GeminiCliPhaseRunner", () => {
 
   it("routes only Gemini CLI identities away from Pi", async () => {
     class Marker implements PhaseRunner { constructor(private label: string) {} async *run(): AsyncIterable<PhaseEvent> { yield { kind: "assistant", text: this.label }; } }
-    const router = new ProviderPhaseRunner(new Marker("pi"), new Marker("gemini"));
+    const router = new ProviderPhaseRunner(new Marker("pi"), new Marker("gemini"), new Marker("antigravity"), new Marker("claude-code"));
     expect(await collect(router, request())).toEqual([{ kind: "assistant", text: "gemini" }]);
     expect(await collect(router, { ...request(), identity: { provider: "ollama", model: "qwen:latest", effort: "medium" } })).toEqual([{ kind: "assistant", text: "pi" }]);
+    expect(await collect(router, { ...request(), identity: { provider: "anthropic", model: "anthropic:claude-sonnet-4-6", effort: "medium" } })).toEqual([{ kind: "assistant", text: "claude-code" }]);
   });
 });

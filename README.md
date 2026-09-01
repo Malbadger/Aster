@@ -151,8 +151,14 @@ Open **Settings → Providers** to connect an account, enter an API key, or add 
 compatible endpoint. Aster keeps every discovered model in the same selector;
 provider names are metadata, not selectable pseudo-models.
 
-- **Claude, ChatGPT/OpenAI, Grok/xAI, and GitHub Copilot** use the login methods
-  exposed by the installed Pi runtime.
+- **Claude** chat phases pass through the user's official Claude Code CLI. The
+  bridge is invisible in chat; replies carry a **Claude Code** badge and the
+  concrete model name. Claude Code owns authentication, sessions, model access,
+  and permission handling. Install it separately and confirm `claude auth
+  status` reports a logged-in account. Individual models may still require
+  usage credits under the user's Anthropic plan.
+- **ChatGPT/OpenAI, Grok/xAI, and GitHub Copilot** use the login methods exposed
+  by the installed Pi runtime.
 - **Gemini personal-account login** uses Google's supported Antigravity CLI
   inside the Aster chat surface. If it is missing, Aster opens Google's official
   installation guide. Complete the Google flow, choose **Done — refresh
@@ -300,6 +306,16 @@ actions**.
 
 Run `law provider login <provider-id>`, then `law doctor`. Login is human-only,
 and paid-provider use may incur charges under the user's provider account.
+
+For the official Claude Code bridge, check:
+
+```bash
+claude --version
+claude auth status
+```
+
+Aster displays Claude Code's exact provider or model-limit message when the CLI
+cannot complete a phase.
 
 ### AppImage does not launch
 

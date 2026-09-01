@@ -175,6 +175,12 @@ button:disabled { cursor: not-allowed; }
 .chat-event.user .chat-event-mark { font-size: 18px; line-height: 1; color: var(--law-color-accent-strong) !important; }
 .chat-event-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; color: var(--law-color-text); white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.65 "IBM Plex Mono", "DejaVu Sans Mono", monospace; }
 .model-attribution { display: inline-flex; align-items: center; width: fit-content; margin-top: 6px; padding: 2px 6px; border: 1px solid var(--law-color-border); border-radius: 999px; background: color-mix(in srgb, var(--law-color-bg-elevated) 76%, transparent); color: var(--law-color-text-muted); font: 600 9px/1.4 "IBM Plex Mono", "DejaVu Sans Mono", monospace; letter-spacing: .04em; }
+.claude-code-attribution { gap: 6px; padding-left: 3px; }
+.claude-code-attribution b { padding: 1px 5px; border-radius: 999px; background: var(--law-color-accent); color: var(--law-color-on-accent); font-weight: 700; }
+.claude-code-attribution span { color: var(--law-color-text-muted); }
+.blocked-diagnostic { max-width: 680px; color: var(--law-color-text-muted); font: 11px/1.55 "IBM Plex Mono", monospace; }
+.blocked-diagnostic summary { width: fit-content; cursor: pointer; color: var(--law-color-warning, var(--law-color-text-muted)); }
+.blocked-diagnostic > span { display: block; margin-top: 6px; padding: 7px 9px; border-left: 2px solid var(--law-color-warning, var(--law-color-border-strong)); background: var(--law-color-bg-input); color: var(--law-color-text-muted); }
 .event-attachments { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .event-attachments small { padding: 2px 6px; border-left: 2px solid var(--law-color-accent); background: var(--law-color-bg-input); color: var(--law-color-text-muted); font: 10px/1.5 "IBM Plex Mono", monospace; }
 .composer-wrap { padding: 10px clamp(12px, 3vw, 34px) 14px; display: flex; flex-direction: column; gap: 7px; }

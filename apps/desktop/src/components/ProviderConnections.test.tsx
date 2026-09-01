@@ -47,15 +47,18 @@ describe("ProviderConnections", () => {
   it("starts supported account and API-key authentication inside the app", () => {
     const onAuthenticate = vi.fn();
     const onGeminiCliLogin = vi.fn();
+    const onClaudeCodeLogin = vi.fn();
     render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop}
       geminiCli={{ installed: true, configured: false, version: "0.57.0", antigravityInstalled: true }}
       authProviders={[
         { id: "anthropic", name: "Anthropic", methods: ["oauth", "api_key"], configured: false },
         { id: "google", name: "Google", methods: ["api_key"], configured: false },
-      ]} onAuthenticate={onAuthenticate} onGeminiCliLogin={onGeminiCliLogin} />);
+      ]} onAuthenticate={onAuthenticate} onGeminiCliLogin={onGeminiCliLogin} onClaudeCodeLogin={onClaudeCodeLogin} />);
     const claude = screen.getByText("Claude").closest("article")!;
-    fireEvent.click(within(claude).getByRole("button", { name: "Sign in" }));
-    expect(onAuthenticate).toHaveBeenCalledWith("anthropic", "oauth");
+    fireEvent.click(within(claude).getByRole("button", { name: "Claude Code sign in" }));
+    expect(onClaudeCodeLogin).toHaveBeenCalledOnce();
+    fireEvent.click(within(claude).getByRole("button", { name: "API key" }));
+    expect(onAuthenticate).toHaveBeenCalledWith("anthropic", "api_key");
     const gemini = screen.getByText("Gemini").closest("article")!;
     fireEvent.click(within(gemini).getByRole("button", { name: "Sign in" }));
     expect(onGeminiCliLogin).toHaveBeenCalledOnce();

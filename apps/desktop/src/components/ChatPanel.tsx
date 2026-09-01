@@ -28,7 +28,7 @@ const KIND_LABEL: Partial<Record<ChatEvent["kind"], string>> = {
   plan: "Thinking",
   tool_call: "Tool",
   tool_result: "Result",
-  tool_denied: "Denied",
+  tool_denied: "Guard",
   handoff: "Handoff",
   approval: "Approval",
   status: "Status",
@@ -36,7 +36,8 @@ const KIND_LABEL: Partial<Record<ChatEvent["kind"], string>> = {
 };
 
 function eventColor(kind: ChatEvent["kind"]): string {
-  if (kind === "error" || kind === "tool_denied") return "var(--law-color-danger)";
+  if (kind === "error") return "var(--law-color-danger)";
+  if (kind === "tool_denied") return "var(--law-color-warning, var(--law-color-text-muted))";
   if (kind === "user") return "var(--law-color-accent-strong)";
   return "var(--law-color-text-muted)";
 }
@@ -62,6 +63,10 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   }
   const conversationalEvents = props.events.filter((event) => event.kind !== "status");
   const visibleEvents = conversationalEvents.filter((event, index) => {
+    if (event.kind === "tool_result" && event.data?.ok === false) {
+      const previous = conversationalEvents[index - 1];
+      if (previous?.kind === "tool_denied" && previous.data?.callId === event.data?.callId) return false;
+    }
     if (event.kind !== "assistant" || index === 0) return true;
     const previous = conversationalEvents[index - 1];
     return !(previous?.kind === "user" && Boolean(event.text) && previous.text?.trim() === event.text?.trim());
@@ -93,8 +98,10 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
           return <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
             <span className="chat-event-mark" style={{ color: eventColor(e.kind) }} aria-hidden>{e.kind === "user" ? "›" : e.kind === "assistant" ? "Aster" : KIND_LABEL[e.kind] ?? e.kind}</span>
             <span className="chat-event-copy">
-              {e.text}
-              {identity && <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>}
+              {e.kind === "tool_denied" ? <details className="blocked-diagnostic"><summary>Aster blocked one background action</summary><span>{e.text}</span></details> : e.text}
+              {identity && (identity.provider === "anthropic"
+                ? <small className="model-attribution claude-code-attribution" title={`Official Claude Code · ${identity.model}`}><b>Claude Code</b><span>{identity.model}</span></small>
+                : <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>)}
               {eventAttachments(e).length > 0 && <span className="event-attachments">{eventAttachments(e).map((attachment) => <small key={attachment.attachmentId}>{kindMark(attachment.kind)} {attachment.name}</small>)}</span>}
               {e.kind === "approval" && typeof e.data?.approvalId === "string" && !resolvedApprovals.has(e.data.approvalId) && <span className="approval-actions">
                 <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), true)}>Approve</button>
