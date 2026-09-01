@@ -33,6 +33,7 @@ import { defaultPolicy } from "./ports.js";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { AttachmentService } from "./attachment/attachment-service.js";
 
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
@@ -55,11 +56,13 @@ async function main(): Promise<void> {
   });
   const piRunner = new LawCorePhaseRunner(lawRoot, (provider) => customProviders().find((item) => item.id === provider));
   const phaseRunner = new ProviderPhaseRunner(piRunner, new GeminiCliPhaseRunner(geminiCli.cliPath), new AntigravityPhaseRunner(geminiCli.antigravityPath));
+  const attachments = new AttachmentService(dataRoot);
   const orchestrator = new Orchestrator({
     store: FileTaskStore.forRoot(dataRoot),
     runner: phaseRunner,
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
     workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : lawRoot),
+    attachments,
   });
   const editor = new EditorService({ workspaceRoot: lawRoot, fs: nodeFs });
   const autocomplete = new AutocompleteService();
@@ -91,7 +94,7 @@ async function main(): Promise<void> {
     () => ["Windows/macOS deferred (OPEN-D-002)", "Packaging and UAT run on Ubuntu 24.04 (AS-D-001)", "Local models require a loopback endpoint (e.g. Ollama)"],
     () => ["final visual baseline", "live provider login/paid use", "license/trademark review", "release signing and publication"],
   );
-  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about });
+  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about, attachments });
   const info = await daemon.start();
 
   // Structured, secret-free startup line (token is NEVER logged).

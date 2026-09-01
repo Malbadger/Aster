@@ -1,5 +1,5 @@
 import React from "react";
-import type { ChatEvent } from "@law/contracts";
+import type { AttachmentDescriptor, ChatEvent } from "@law/contracts";
 
 /**
  * Chat panel (SURF-D-004, EXP-D-004/005). Orchestration is chat-native: plans,
@@ -11,10 +11,17 @@ export interface ChatPanelProps {
   events: ChatEvent[];
   running: boolean;
   onSend: (text: string) => void;
+  onBeforeSend?: () => boolean | Promise<boolean>;
   onStop: () => void;
   onRespondApproval?: (approvalId: string, approved: boolean) => void;
   controls?: React.ReactNode;
   interactive?: React.ReactNode;
+  composerNotice?: React.ReactNode;
+  attachments?: AttachmentDescriptor[];
+  attachmentBusy?: boolean;
+  onChooseAttachments?: () => void;
+  onRemoveAttachment?: (attachmentId: string) => void;
+  onFiles?: (files: File[]) => void;
 }
 
 const KIND_LABEL: Partial<Record<ChatEvent["kind"], string>> = {
@@ -45,6 +52,8 @@ function eventIdentity(event: ChatEvent, phases: Map<string, { provider: string;
 
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
+  const [dragging, setDragging] = React.useState(false);
   const phaseIdentities = new Map<string, { provider: string; model: string }>();
   for (const event of props.events) {
     if (!event.phaseId) continue;
@@ -58,15 +67,22 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
     return !(previous?.kind === "user" && Boolean(event.text) && previous.text?.trim() === event.text?.trim());
   });
   const resolvedApprovals = new Set(props.events.filter((event) => event.kind === "status" && typeof event.data?.approvalId === "string").map((event) => String(event.data?.approvalId)));
-  const submit = () => {
-    const t = text.trim();
-    if (!t || props.running) return;
-    props.onSend(t);
-    setText("");
+  const submit = async () => {
+    const t = text.trim() || ((props.attachments?.length ?? 0) > 0 ? "Review the attached files." : "");
+    if (!t || props.running || submitting) return;
+    setSubmitting(true);
+    try {
+      if (props.onBeforeSend && !(await props.onBeforeSend())) return;
+      props.onSend(t); setText("");
+    } finally { setSubmitting(false); }
   };
 
   return (
-    <section aria-label="Chat" className="chat-panel">
+    <section aria-label="Chat" className={`chat-panel${dragging ? " is-dragging" : ""}`}
+      onDragEnter={(event) => { if (event.dataTransfer.types.includes("Files")) { event.preventDefault(); setDragging(true); } }}
+      onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
+      onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+      onDrop={(event) => { event.preventDefault(); setDragging(false); props.onFiles?.(Array.from(event.dataTransfer.files)); }}>
       <header className="pane-title"><strong>Chat</strong><span>Ask, build, review</span></header>
       <ol aria-label="Conversation" className="conversation">
         {visibleEvents.length === 0 && (
@@ -79,6 +95,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
             <span className="chat-event-copy">
               {e.text}
               {identity && <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>}
+              {eventAttachments(e).length > 0 && <span className="event-attachments">{eventAttachments(e).map((attachment) => <small key={attachment.attachmentId}>{kindMark(attachment.kind)} {attachment.name}</small>)}</span>}
               {e.kind === "approval" && typeof e.data?.approvalId === "string" && !resolvedApprovals.has(e.data.approvalId) && <span className="approval-actions">
                 <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), true)}>Approve</button>
                 <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), false)}>Deny</button>
@@ -92,17 +109,25 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
 
       <div className="composer-wrap">
         {props.controls && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{props.controls}</div>}
+        {props.composerNotice}
+        {(props.attachments?.length ?? 0) > 0 && <div className="attachment-tray" aria-label="Message attachments">{props.attachments!.map((attachment) => <span className="attachment-chip" key={attachment.attachmentId} title={`${attachment.mimeType} · ${formatBytes(attachment.size)}`}>
+          <i aria-hidden>{kindMark(attachment.kind)}</i><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.size)}</small></span><button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => props.onRemoveAttachment?.(attachment.attachmentId)}>×</button>
+        </span>)}</div>}
         <div className="composer-row">
+          <button className="attach-button" type="button" aria-label="Attach files" title="Attach files" disabled={props.attachmentBusy || props.running} onClick={props.onChooseAttachments}>
+            <svg aria-hidden viewBox="0 0 24 24"><path d="M9.5 12.5l5.9-5.9a3 3 0 114.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.1-8.1" /></svg>
+          </button>
           <span className="composer-prompt" aria-hidden>›</span>
           <textarea
             aria-label="Message"
             autoFocus
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); props.onFiles?.(files); } }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                submit();
+                void submit();
               }
             }}
             rows={3}
@@ -112,10 +137,18 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
           {props.running ? (
             <button type="button" onClick={props.onStop} style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-danger)", background: "transparent", color: "var(--law-color-danger)", cursor: "pointer" }}>Stop</button>
           ) : (
-            <button type="button" onClick={submit} aria-label="Send" style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-accent)", background: "var(--law-color-accent)", color: "var(--law-color-on-accent)", cursor: "pointer" }}>Send</button>
+            <button type="button" disabled={submitting || props.attachmentBusy} onClick={() => void submit()} aria-label="Send" style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-accent)", background: "var(--law-color-accent)", color: "var(--law-color-on-accent)", cursor: "pointer" }}>{submitting ? "Reviewing…" : props.attachmentBusy ? "Attaching…" : "Send"}</button>
           )}
         </div>
       </div>
     </section>
   );
 }
+
+function eventAttachments(event: ChatEvent): AttachmentDescriptor[] {
+  const value = event.data?.attachments;
+  return Array.isArray(value) ? value.filter((item): item is AttachmentDescriptor => Boolean(item && typeof item === "object" && "attachmentId" in item && "name" in item && "kind" in item)) : [];
+}
+
+function kindMark(kind: AttachmentDescriptor["kind"]): string { return kind === "image" ? "▧" : kind === "pdf" ? "PDF" : "<>"; }
+function formatBytes(size: number): string { return size < 1024 ? `${size} B` : size < 1024 * 1024 ? `${(size / 1024).toFixed(1)} KB` : `${(size / 1024 / 1024).toFixed(1)} MB`; }

@@ -162,7 +162,8 @@ button:disabled { cursor: not-allowed; }
 .terminal-error { position: absolute; inset: 8px 8px auto; z-index: 2; padding: 7px 10px; border: 1px solid var(--law-color-danger); border-radius: 4px; background: var(--law-color-bg-panel); color: var(--law-color-danger); }
 .statusbar { height: 23px; flex: 0 0 23px; display: flex; align-items: center; justify-content: flex-end; gap: 18px; padding: 0 10px; background: var(--law-color-accent); color: var(--law-color-on-accent); font-size: 11px; }
 .statusbar span:first-child { margin-right: auto; font-weight: 700; letter-spacing: .1em; }
-.chat-panel { height: 100%; display: flex; flex-direction: column; background: var(--law-editor-bg); }
+.chat-panel { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--law-editor-bg); }
+.chat-panel.is-dragging::after { content: "Drop files into this message"; position: absolute; z-index: 30; inset: 46px 14px 14px; display: grid; place-items: center; border: 1px dashed var(--law-color-accent-strong); background: color-mix(in srgb, var(--law-color-bg-panel) 90%, transparent); color: var(--law-color-accent-strong); font: 600 12px/1.4 "IBM Plex Mono", monospace; letter-spacing: .05em; pointer-events: none; }
 .pane-title { color: var(--law-color-text); }
 .pane-title span { color: var(--law-color-text-faint); text-transform: none; letter-spacing: 0; }
 .conversation { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: clamp(20px, 3vw, 42px) clamp(18px, 3vw, 40px); display: flex; flex-direction: column; gap: 14px; background-image: linear-gradient(90deg, color-mix(in srgb, var(--law-color-border) 52%, transparent) 1px, transparent 1px); background-size: 1px 100%; background-position: clamp(18px, 3vw, 40px) 0; background-repeat: no-repeat; }
@@ -174,12 +175,30 @@ button:disabled { cursor: not-allowed; }
 .chat-event.user .chat-event-mark { font-size: 18px; line-height: 1; color: var(--law-color-accent-strong) !important; }
 .chat-event-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; color: var(--law-color-text); white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.65 "IBM Plex Mono", "DejaVu Sans Mono", monospace; }
 .model-attribution { display: inline-flex; align-items: center; width: fit-content; margin-top: 6px; padding: 2px 6px; border: 1px solid var(--law-color-border); border-radius: 999px; background: color-mix(in srgb, var(--law-color-bg-elevated) 76%, transparent); color: var(--law-color-text-muted); font: 600 9px/1.4 "IBM Plex Mono", "DejaVu Sans Mono", monospace; letter-spacing: .04em; }
+.event-attachments { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.event-attachments small { padding: 2px 6px; border-left: 2px solid var(--law-color-accent); background: var(--law-color-bg-input); color: var(--law-color-text-muted); font: 10px/1.5 "IBM Plex Mono", monospace; }
 .composer-wrap { padding: 10px clamp(12px, 3vw, 34px) 14px; display: flex; flex-direction: column; gap: 7px; }
 .composer-row { display: flex; align-items: flex-start; gap: 7px; padding: 8px; border: 1px solid var(--law-color-border-strong); border-radius: 5px; background: var(--law-color-bg-input); box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 2px 0 var(--law-color-accent); }
 .composer-prompt { flex: 0 0 19px; padding-top: 8px; color: var(--law-color-accent-strong); font: 700 18px/1 "IBM Plex Mono", "DejaVu Sans Mono", monospace; text-align: center; }
 .composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 42px; padding: 7px 6px; border: 0 !important; outline: 0; resize: none !important; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 13px/1.55 "IBM Plex Mono", "DejaVu Sans Mono", monospace; }
 .composer-row textarea.chat-composer-input::placeholder { color: var(--law-color-text-faint); -webkit-text-fill-color: var(--law-color-text-faint); opacity: 1; }
 .composer-row textarea.chat-composer-input::selection { color: var(--law-color-text); background: color-mix(in srgb, var(--law-color-accent) 42%, transparent); }
+.attach-button { flex: 0 0 30px; width: 30px; height: 30px; margin-top: 3px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--law-color-text-muted); cursor: pointer; }
+.attach-button:hover, .attach-button:focus-visible { background: var(--law-color-bg-elevated); color: var(--law-color-accent-strong); }
+.attach-button:disabled { opacity: .4; cursor: wait; }
+.attach-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.attachment-tray { display: flex; flex-wrap: wrap; gap: 6px; }
+.attachment-chip { max-width: 240px; min-height: 38px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 5px 6px 5px 8px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-input); color: var(--law-color-text); }
+.attachment-chip > i { color: var(--law-color-accent-strong); font: 700 9px/1 "IBM Plex Mono", monospace; font-style: normal; }
+.attachment-chip > span { min-width: 0; display: flex; flex-direction: column; }
+.attachment-chip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 11px/1.4 "IBM Plex Mono", monospace; }
+.attachment-chip small { color: var(--law-color-text-faint); font-size: 9px; }
+.attachment-chip button { width: 23px; height: 23px; padding: 0; border: 0; background: transparent; color: var(--law-color-text-muted); font-size: 16px; cursor: pointer; }
+.attachment-disclosure { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 14px; padding: 9px 11px; border: 1px solid var(--law-color-warning, var(--law-color-accent-strong)); border-radius: 5px; background: color-mix(in srgb, var(--law-color-bg-elevated) 84%, transparent); color: var(--law-color-text); }
+.attachment-disclosure strong, .attachment-disclosure span { grid-column: 1; }
+.attachment-disclosure span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--law-color-text-muted); font-size: 10px; }
+.attachment-disclosure > div { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 6px; }
+.attachment-disclosure button { min-height: 29px; padding: 4px 8px; border: 1px solid var(--law-color-border); border-radius: 4px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
 .processing { display: flex; align-items: center; gap: 9px; color: var(--law-color-text-muted); font-size: 12px; }
 .chat-interactive { width: min(620px, 94%); list-style: none; }
 .chat-action-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--law-color-border-strong); border-radius: 10px; background: var(--law-color-bg-elevated); }

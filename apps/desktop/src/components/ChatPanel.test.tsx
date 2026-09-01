@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ChatPanel } from "./ChatPanel.js";
 import type { ChatEvent } from "@law/contracts";
 
@@ -54,5 +54,26 @@ describe("ChatPanel", () => {
       data: { identity: { provider: "openai-codex", model: "gpt-5.6-sol", effort: "high" } },
     }]} running={false} onSend={() => {}} onStop={() => {}} />);
     expect(screen.getByText("gpt-5.6-sol")).toHaveAttribute("title", "Provider: openai-codex");
+  });
+
+  it("shows attachment chips, removes them, and waits for send preflight", async () => {
+    const onSend = vi.fn(); const onRemove = vi.fn(); const onBeforeSend = vi.fn(async () => false);
+    render(<ChatPanel events={[]} running={false} onSend={onSend} onStop={() => {}} onBeforeSend={onBeforeSend}
+      attachments={[{ attachmentId: "att-1", name: "design.md", mimeType: "text/plain", size: 2048, kind: "text" }]}
+      onRemoveAttachment={onRemove} onChooseAttachments={() => {}} />);
+    expect(screen.getByText("design.md")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove design.md" }));
+    expect(onRemove).toHaveBeenCalledWith("att-1");
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(onBeforeSend).toHaveBeenCalled());
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("accepts files pasted directly into the composer", () => {
+    const onFiles = vi.fn();
+    render(<ChatPanel events={[]} running={false} onSend={() => {}} onStop={() => {}} onFiles={onFiles} />);
+    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
+    fireEvent.paste(screen.getByLabelText("Message"), { clipboardData: { files: [file] } });
+    expect(onFiles).toHaveBeenCalledWith([file]);
   });
 });

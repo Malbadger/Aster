@@ -51,6 +51,8 @@ import {
   about_get,
   workspace_get_root,
   workspace_set_root,
+  attachment_import,
+  attachment_stage,
   type EffortLevel,
   type AddConnectionInput,
   type PhaseIdentity,
@@ -71,6 +73,7 @@ import type { AutocompleteService } from "./editor/autocomplete.js";
 import type { GitService } from "./git/git-service.js";
 import type { LoggingService } from "./logging/logging-service.js";
 import type { EvidenceService } from "./evidence/evidence-service.js";
+import type { AttachmentService } from "./attachment/attachment-service.js";
 import type { UpdateService, MigrationService, PluginService, AboutService } from "./system/system-service.js";
 import { PROTOCOL_VERSION } from "@law/contracts";
 import { existsSync, statSync } from "node:fs";
@@ -92,6 +95,7 @@ export interface DaemonOptions {
   migration: MigrationService;
   plugins: PluginService;
   about: AboutService;
+  attachments?: AttachmentService;
   pluginManifests?: PluginManifest[];
   policy?: PolicyPort;
   clock?: Clock;
@@ -119,6 +123,7 @@ export class Daemon {
   private readonly migration: MigrationService;
   private readonly plugins: PluginService;
   private readonly about: AboutService;
+  private readonly attachments: Pick<AttachmentService, "importPath" | "stageBase64">;
   private readonly pluginManifests: PluginManifest[];
   private readonly policy: PolicyPort;
   private readonly clock: Clock;
@@ -140,6 +145,10 @@ export class Daemon {
     this.migration = opts.migration;
     this.plugins = opts.plugins;
     this.about = opts.about;
+    this.attachments = opts.attachments ?? {
+      importPath: () => { throw new Error("Attachment service unavailable"); },
+      stageBase64: () => { throw new Error("Attachment service unavailable"); },
+    };
     this.pluginManifests = opts.pluginManifests ?? [];
     this.policy = opts.policy ?? defaultPolicy;
     this.clock = opts.clock ?? systemClock;
@@ -212,7 +221,7 @@ export class Daemon {
       return this.orchestrator.getTask(taskId);
     });
     this.dispatcher.handle(task_send_message.name, (payload) =>
-      this.orchestrator.sendMessage(payload as { taskId: string; text: string; identity?: PhaseIdentity }),
+      this.orchestrator.sendMessage(payload as { taskId: string; text: string; identity?: PhaseIdentity; attachmentIds?: string[]; attachmentEgressApproved?: boolean }),
     );
     this.dispatcher.handle(task_get_events.name, (payload) => {
       const { taskId, sinceSeq } = payload as { taskId: string; sinceSeq: number };
@@ -229,6 +238,12 @@ export class Daemon {
     this.dispatcher.handle(task_delete.name, (payload) => {
       const { taskId } = payload as { taskId: string };
       return this.orchestrator.deleteTask(taskId);
+    });
+
+    this.dispatcher.handle(attachment_import.name, (payload) => this.attachments.importPath((payload as { path: string }).path));
+    this.dispatcher.handle(attachment_stage.name, (payload) => {
+      const { name, mimeType, dataBase64 } = payload as { name: string; mimeType: string; dataBase64: string };
+      return this.attachments.stageBase64(name, mimeType, dataBase64);
     });
 
     this.dispatcher.handle(fs_read_file.name, (payload) => {

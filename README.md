@@ -104,6 +104,26 @@ Only configured, available providers can run. Aster displays interpreted phases
 and results chronologically. Prompt text cannot grant extra filesystem,
 command, network, or credential permissions.
 
+### Attach files to chat
+
+Use the paperclip beside the composer, drag files onto the chat, or paste a
+copied file. Aster supports up to 10 files per message and 25 MB per file:
+
+- text and source-code files are added as bounded model context;
+- PDF text is extracted locally before it is sent;
+- PNG, JPEG, WebP, and GIF images use the selected model's image input when
+  that model advertises vision support.
+
+Attachments are copied into Aster's private local staging directory. Chat
+history records only attachment names, types, and sizes—not extracted text or
+image contents. When a remote model is selected, Aster names the files and asks
+for confirmation before their contents leave the machine. Choose a local model
+to keep attached content on-device. Unsupported binary files are rejected.
+
+An attachment-only message is treated as a request to review the selected
+files. Attach the relevant files for chat-style analysis; open a workspace in
+VSCodium for longer code-style work where the model needs project context.
+
 ### Edit and verify files
 
 Open **Editor** at any time to start VSCodium in the current workspace, or in
@@ -284,7 +304,7 @@ and paid-provider use may incur charges under the user's provider account.
 ### AppImage does not launch
 
 ```bash
-chmod +x LAW_0.1.0_amd64.AppImage
+chmod +x Aster_0.1.0_amd64.AppImage
 ./Aster_0.1.0_amd64.AppImage --appimage-extract-and-run
 ```
 

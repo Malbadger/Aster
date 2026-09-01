@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from './phase-runner.js';
+import { promptWithAttachments, type PhaseEvent, type PhaseRunRequest, type PhaseRunner } from './phase-runner.js';
 
 function sessionUuid(taskId: string): string {
   const hex = createHash('sha256').update(`aster:gemini:${taskId}`).digest('hex').slice(0, 32);
@@ -23,7 +23,7 @@ export class GeminiCliPhaseRunner implements PhaseRunner {
     if (selected && selected !== 'auto') args.push('--model', selected);
     if (first) args.push('--session-id', id);
     else args.push('--resume', id);
-    args.push('--prompt', req.prompt);
+    args.push('--prompt', promptWithAttachments(req, true));
 
     const child = spawn(this.nodePath, args, {
       cwd: req.workspaceRoot,
@@ -82,7 +82,7 @@ export class AntigravityPhaseRunner implements PhaseRunner {
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const selected = req.identity.model.startsWith('antigravity:') ? req.identity.model.slice('antigravity:'.length) : req.identity.model;
-    const args = ['-p', req.prompt, '--output-format', 'stream-json', '--effort', normalizeEffort(req.identity.effort)];
+    const args = ['-p', promptWithAttachments(req, true), '--output-format', 'stream-json', '--effort', normalizeEffort(req.identity.effort)];
     if (selected && selected !== 'auto') args.push('--model', selected);
     const prior = this.conversations.get(req.taskId);
     if (prior) args.push('--conversation', prior);

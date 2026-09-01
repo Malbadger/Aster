@@ -126,7 +126,7 @@ class ScriptedSession implements PiSession {
     this.plan = plan;
   }
 
-  async *submit(prompt: string): AsyncIterable<LawEvent> {
+  async *submit(prompt: string, _images: Array<{ data: string; mimeType: string }> = []): AsyncIterable<LawEvent> {
     yield { kind: 'session_started', sessionId: this.sessionId };
     const plan = this.plan(prompt, this.spec);
     let callSeq = 0;

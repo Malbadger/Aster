@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 import { defineOperation } from "./ipc.js";
-import { EffortLevel } from "./model.js";
+import { EffortLevel, Locality } from "./model.js";
 
 export const PhaseStatus = z.enum([
   "pending",
@@ -33,6 +33,7 @@ export const PhaseIdentity = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
   effort: EffortLevel,
+  locality: Locality.optional(),
   /** Optional only for persisted pre-mode tasks; the runtime defaults these to manual. */
   mode: ExecutionMode.optional(),
 });
@@ -142,6 +143,8 @@ export const task_send_message = defineOperation({
     taskId: z.string().min(1),
     text: z.string().min(1),
     identity: PhaseIdentity.optional(),
+    attachmentIds: z.array(z.string().min(1)).max(10).default([]),
+    attachmentEgressApproved: z.boolean().default(false),
   }),
   response: z.object({
     accepted: z.boolean(),

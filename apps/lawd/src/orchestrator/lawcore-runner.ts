@@ -7,7 +7,7 @@
  */
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
+import { promptWithAttachments, type PhaseEvent, type PhaseRunRequest, type PhaseRunner } from "./phase-runner.js";
 import type { CustomProviderSpecLike } from "../provider/custom-spec.js";
 
 // Minimal shapes of the Aster Core boundary we rely on (kept local to avoid a
@@ -26,7 +26,7 @@ interface LawEventLike {
 }
 
 interface PiSessionLike {
-  submit(prompt: string): AsyncIterable<Record<string, unknown>>;
+  submit(prompt: string, images?: Array<{ data: string; mimeType: string }>): AsyncIterable<Record<string, unknown>>;
   control?(command: string, argument?: string): Promise<string>;
   abort(): Promise<void>;
   dispose(): Promise<void>;
@@ -82,7 +82,8 @@ export class LawCorePhaseRunner implements PhaseRunner {
     req.signal.addEventListener("abort", onAbort, { once: true });
 
     try {
-      for await (const raw of session.submit(req.prompt)) {
+      const images = (req.attachments ?? []).filter((attachment) => attachment.kind === "image" && attachment.dataBase64).map((attachment) => ({ data: attachment.dataBase64!, mimeType: attachment.mimeType }));
+      for await (const raw of session.submit(promptWithAttachments(req), images)) {
         const e = raw as unknown as LawEventLike;
         const mapped = mapEvent(e);
         if (mapped) yield mapped;

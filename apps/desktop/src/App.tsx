@@ -7,11 +7,12 @@ import {
   task_get_events, task_list, task_send_message, task_delete, task_respond_approval,
   fs_read_file, fs_write_file, verify_run,
   workspace_set_root,
+  attachment_import, attachment_stage,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
   provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   provider_gemini_cli_status,
   type CapabilityProbe, type ChatEvent, type EffortLevel, type ExecutionMode,
-  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow,
+  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow, type AttachmentDescriptor,
 } from "@law/contracts";
 import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
@@ -48,7 +49,7 @@ function loadLayout(): Layout {
 }
 
 function identityFor(model: ModelDescriptor | undefined, effort: EffortLevel, mode: ExecutionMode): PhaseIdentity | undefined {
-  return model ? { provider: model.provider, model: model.id, effort, mode } : undefined;
+  return model ? { provider: model.provider, model: model.id, effort, mode, locality: model.locality } : undefined;
 }
 
 export function App({ client = defaultClient }: AppProps): React.JSX.Element {
@@ -90,6 +91,10 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [authBrowserError, setAuthBrowserError] = React.useState<string>();
   const [geminiCli, setGeminiCli] = React.useState<GeminiCliStatusView>();
   const [geminiLoginOpen, setGeminiLoginOpen] = React.useState(false);
+  const [attachments, setAttachments] = React.useState<AttachmentDescriptor[]>([]);
+  const [attachmentBusy, setAttachmentBusy] = React.useState(false);
+  const [remoteAttachmentConfirm, setRemoteAttachmentConfirm] = React.useState<{ names: string[]; resolve: (allowed: boolean) => void }>();
+  const attachmentEgressApproved = React.useRef(false);
   const openedAuthUrl = React.useRef<string>();
   const refreshedAuthFlow = React.useRef<string>();
   const selected = models.find((model) => model.id === selectedId);
@@ -205,6 +210,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     setTaskId(undefined);
     setEvents([]);
     setRunning(false);
+    setAttachments([]);
+    attachmentEgressApproved.current = false;
     setConversationKey((value) => value + 1);
     setActivePanel("chat");
     setLayout((old) => ({ ...old, chat: true }));
@@ -296,14 +303,50 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         targetTaskId = created.task.taskId;
         setTaskId(targetTaskId);
       }
-      const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort, mode) });
+      const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort, mode), attachmentIds: attachments.map((attachment) => attachment.attachmentId), attachmentEgressApproved: attachmentEgressApproved.current });
       setEvents((await client.call(task_get_events, { taskId: targetTaskId, sinceSeq: 0 })).events);
-      setRunning(result.status === "running"); await refreshTasks();
+      attachmentEgressApproved.current = false; setAttachments([]); setRunning(result.status === "running"); await refreshTasks();
     } catch (cause) {
+      attachmentEgressApproved.current = false;
       const message = cause instanceof Error ? cause.message : String(cause);
       setError(message); setRunning(false);
       setEvents((current) => [...current, { id: `local-error-${Date.now()}`, taskId: taskId ?? "pending", seq: current.length, at: new Date().toISOString(), kind: "error", text: `Message was not sent: ${message}` }]);
     }
+  }
+
+  async function chooseAttachments(): Promise<void> {
+    const chosen = await openNativePath({ directory: false, multiple: true, title: "Attach files to this message" });
+    const paths = typeof chosen === "string" ? [chosen] : chosen ?? [];
+    if (!paths.length) return;
+    setAttachmentBusy(true); setError(undefined);
+    try {
+      const imported = await Promise.all(paths.map((path) => client.call(attachment_import, { path })));
+      setAttachments((current) => mergeAttachments(current, imported.map((item) => item.attachment)));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setAttachmentBusy(false); }
+  }
+
+  async function stageFiles(files: File[]): Promise<void> {
+    if (!files.length) return;
+    setAttachmentBusy(true); setError(undefined);
+    try {
+      const staged: AttachmentDescriptor[] = [];
+      for (const file of files) {
+        const dataBase64 = bufferToBase64(await file.arrayBuffer());
+        staged.push((await client.call(attachment_stage, { name: file.name || `pasted-${Date.now()}.png`, mimeType: file.type || "application/octet-stream", dataBase64 })).attachment);
+      }
+      setAttachments((current) => mergeAttachments(current, staged));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setAttachmentBusy(false); }
+  }
+
+  function approveRemoteAttachmentSend(): Promise<boolean> {
+    if (attachments.some((attachment) => attachment.kind === "image") && !selected?.capabilities.vision) {
+      setError(`${selected?.displayName ?? "The selected model"} does not report image support. Choose a vision-capable model or remove the image.`);
+      return Promise.resolve(false);
+    }
+    if (!attachments.length || selected?.locality !== "remote") return Promise.resolve(true);
+    return new Promise<boolean>((resolve) => setRemoteAttachmentConfirm({ names: attachments.map((attachment) => attachment.name), resolve }));
   }
 
   async function stop(): Promise<void> {
@@ -444,10 +487,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} onRespondApproval={(approvalId, approved) => {
+    chat: <ChatPanel key={conversationKey} events={events} running={running} attachments={attachments} attachmentBusy={attachmentBusy}
+      onChooseAttachments={() => void chooseAttachments()} onFiles={(files) => void stageFiles(files)} onRemoveAttachment={(id) => setAttachments((current) => current.filter((attachment) => attachment.attachmentId !== id))}
+      onBeforeSend={approveRemoteAttachmentSend} onSend={(text) => void send(text)} onStop={() => void stop()} onRespondApproval={(approvalId, approved) => {
       if (!taskId) return;
       void client.call(task_respond_approval, { taskId, approvalId, approved }).then(async () => setEvents((await client.call(task_get_events, { taskId, sinceSeq: 0 })).events));
-    }} controls={controls} interactive={geminiLoginOpen
+    }} controls={controls} composerNotice={remoteAttachmentConfirm ? <div className="attachment-disclosure" role="alert"><strong>Send local files to {selected?.displayName}?</strong><span>{remoteAttachmentConfirm.names.join(", ")} will leave this device for this message.</span><div><button type="button" onClick={() => { attachmentEgressApproved.current = false; remoteAttachmentConfirm.resolve(false); setRemoteAttachmentConfirm(undefined); }}>Keep local</button><button className="primary" type="button" onClick={() => { attachmentEgressApproved.current = true; remoteAttachmentConfirm.resolve(true); setRemoteAttachmentConfirm(undefined); }}>Send files</button></div></div> : undefined} interactive={geminiLoginOpen
       ? <GeminiCliLogin directory={workspaceRoot} onDone={() => void finishGeminiCliLogin()} onCancel={() => setGeminiLoginOpen(false)} />
       : authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
       onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
@@ -515,4 +560,16 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
 function EmptyPanel({ title, detail, action, onAction }: { title: string; detail: string; action?: string; onAction?: () => void }): React.JSX.Element {
   return <div className="empty-panel"><span className="empty-kicker">{title}</span><p>{detail}</p>{action && <button type="button" onClick={onAction}>{action}</button>}</div>;
+}
+
+function mergeAttachments(current: AttachmentDescriptor[], added: AttachmentDescriptor[]): AttachmentDescriptor[] {
+  const merged = [...current];
+  for (const attachment of added) if (!merged.some((item) => item.attachmentId === attachment.attachmentId) && merged.length < 10) merged.push(attachment);
+  return merged;
+}
+
+function bufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer); let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32_768) binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  return btoa(binary);
 }

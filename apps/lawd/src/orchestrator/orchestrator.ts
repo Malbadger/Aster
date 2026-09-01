@@ -20,6 +20,7 @@ import { Redactor } from "../security/redaction.js";
 import { PolicyGate } from "../policy/gate.js";
 import type { NetPolicyState } from "../security/net-policy.js";
 import type { PhaseEvent, PhaseRunner } from "./phase-runner.js";
+import type { ResolvedAttachment } from "../attachment/attachment-service.js";
 import { interpret } from "./interpret.js";
 import type { TaskStore } from "./task-store.js";
 
@@ -31,6 +32,7 @@ export interface OrchestratorDeps {
   workspaceRootFor: (task: Task) => string;
   allowedTools?: string[];
   now?: () => Date;
+  attachments?: { resolve(ids: string[]): ResolvedAttachment[] };
 }
 
 interface RunHandle {
@@ -119,7 +121,7 @@ export class Orchestrator {
     });
   }
 
-  sendMessage(input: { taskId: string; text: string; identity?: PhaseIdentity }): {
+  sendMessage(input: { taskId: string; text: string; identity?: PhaseIdentity; attachmentIds?: string[]; attachmentEgressApproved?: boolean }): {
     accepted: boolean;
     interpretation: Interpretation;
     phaseId?: string;
@@ -143,7 +145,13 @@ export class Orchestrator {
       return { accepted: false, interpretation: parsed.interpretation, status: "running", reason: "phase in progress", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
 
-    this.append(task.taskId, { kind: "user", taskId: task.taskId, text: input.text });
+    const attachments = this.deps.attachments?.resolve(input.attachmentIds ?? []) ?? [];
+    const preflightIdentity = input.identity ?? task.defaultIdentity;
+    if (attachments.length && preflightIdentity && preflightIdentity.locality !== "local" && !input.attachmentEgressApproved) {
+      throw Object.assign(new Error("Confirm the remote attachment disclosure before sending local files to this model."), { code: "EGRESS_APPROVAL_REQUIRED" });
+    }
+    const attachmentMeta = attachments.map(({ attachmentId, name, mimeType, size, kind }) => ({ attachmentId, name, mimeType, size, kind }));
+    this.append(task.taskId, { kind: "user", taskId: task.taskId, text: input.text, ...(attachmentMeta.length ? { data: { attachments: attachmentMeta, attachmentEgressApproved: Boolean(input.attachmentEgressApproved) } } : {}) });
     // Deterministic local commands (not phases). Unknown slash commands pass
     // through to Pi so installed extensions retain their native command surface.
     if (parsed.command === "help") {
@@ -152,7 +160,7 @@ export class Orchestrator {
     }
 
     // Phase-running path (NL, /run, /plan, /audit).
-    const selectedIdentity = input.identity ?? task.defaultIdentity;
+    const selectedIdentity = preflightIdentity;
     const identity = selectedIdentity && parsed.command === "plan" ? { ...selectedIdentity, mode: "plan" as const } : selectedIdentity;
     if (!identity) {
       this.append(task.taskId, { kind: "status", taskId: task.taskId, text: "Select a model before running (no default identity for this task)." });
@@ -178,13 +186,13 @@ export class Orchestrator {
     });
 
     const controller = new AbortController();
-    const promise = this.execPhase(task, phase, phasePrompt, controller);
+    const promise = this.execPhase(task, phase, phasePrompt, controller, attachments);
     this.running.set(task.taskId, { controller, promise, acknowledgedCancel: false });
 
     return { accepted: true, interpretation: parsed.interpretation, phaseId: phase.phaseId, status: "running", nextSeq: this.deps.store.nextSeq(task.taskId) };
   }
 
-  private async execPhase(task: Task, phase: Phase, prompt: string, controller: AbortController): Promise<void> {
+  private async execPhase(task: Task, phase: Phase, prompt: string, controller: AbortController, attachments: ResolvedAttachment[]): Promise<void> {
     const gate = new PolicyGate({
       allowedTools: this.deps.allowedTools ?? DEFAULT_TOOLS,
       workspaceRoot: this.deps.workspaceRootFor(task),
@@ -217,6 +225,7 @@ export class Orchestrator {
         taskId: task.taskId,
         identity: phase.identity,
         prompt,
+        attachments: attachments,
         tools: this.deps.allowedTools ?? DEFAULT_TOOLS,
         workspaceRoot: this.deps.workspaceRootFor(task),
         allowMutation: mode !== "plan",

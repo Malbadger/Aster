@@ -80,7 +80,7 @@ export interface TranscriptRef {
 export interface PiSession {
   readonly sessionId: string;
   /** Submit a prompt; yields normalized, provider-neutral events (REQ-002). */
-  submit(prompt: string): AsyncIterable<LawEvent>;
+  submit(prompt: string, images?: Array<{ data: string; mimeType: string }>): AsyncIterable<LawEvent>;
   /** Structured equivalents of Pi's non-prompt slash controls. */
   control?(command: string, argument?: string): Promise<string>;
   /** A reference to where the transcript lives, not its content (REQ-017). */

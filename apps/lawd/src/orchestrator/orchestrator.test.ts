@@ -156,4 +156,23 @@ describe("Orchestrator", () => {
     expect(auto.orch.getEvents(autoTask.taskId, 0).events.some((event) => event.kind === "approval")).toBe(false);
     expect(auto.orch.getEvents(autoTask.taskId, 0).events.some((event) => event.kind === "tool_result")).toBe(true);
   });
+
+  it("requires explicit egress approval and passes only resolved attachments to the runner", async () => {
+    let seen: PhaseRunRequest | undefined;
+    const runner: PhaseRunner = { async *run(req) { seen = req; yield { kind: "settled" }; } };
+    const store = new MemoryTaskStore();
+    const orch = new Orchestrator({
+      store, runner, netState: () => ({ offlineLocalOnly: true, remoteAuthorized: false }), workspaceRootFor: () => "/work/ws",
+      attachments: { resolve: () => [{ attachmentId: "att-1", name: "brief.md", mimeType: "text/plain", size: 6, kind: "text", stagedPath: "/private/brief.md", text: "secret" }] },
+    });
+    const identity: PhaseIdentity = { ...IDENTITY, locality: "remote" };
+    const task = orch.createTask({ title: "attachments", defaultIdentity: identity }).task;
+    expect(() => orch.sendMessage({ taskId: task.taskId, text: "review", attachmentIds: ["att-1"] })).toThrow(/Confirm the remote attachment disclosure/);
+    orch.sendMessage({ taskId: task.taskId, text: "review", attachmentIds: ["att-1"], attachmentEgressApproved: true });
+    await orch.idle(task.taskId);
+    expect(seen?.attachments?.[0]?.text).toBe("secret");
+    const user = orch.getEvents(task.taskId, 0).events.find((event) => event.kind === "user");
+    expect(user?.data?.attachments).toEqual([expect.objectContaining({ name: "brief.md", kind: "text" })]);
+    expect(JSON.stringify(user?.data)).not.toContain("secret");
+  });
 });

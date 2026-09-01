@@ -207,7 +207,7 @@ class SdkSession implements PiSession {
     this.deniedSink = deniedSink;
   }
 
-  async *submit(prompt: string): AsyncIterable<LawEvent> {
+  async *submit(prompt: string, images: Array<{ data: string; mimeType: string }> = []): AsyncIterable<LawEvent> {
     yield { kind: 'session_started', sessionId: this.sessionId };
 
     const queue: LawEvent[] = [];
@@ -228,7 +228,7 @@ class SdkSession implements PiSession {
       }
     });
 
-    const runPromise = this.session.prompt(prompt).catch((err: unknown) => {
+    const runPromise = this.session.prompt(prompt, images.length ? { images: images.map((image) => ({ type: 'image' as const, ...image })) } : undefined).catch((err: unknown) => {
       push({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
       settled = true;
     });

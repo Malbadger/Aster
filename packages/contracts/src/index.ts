@@ -18,6 +18,7 @@ export * from "./logging.js";
 export * from "./evidence.js";
 export * from "./system.js";
 export * from "./workspace.js";
+export * from "./attachment.js";
 
 import { ContractRegistry } from "./ipc.js";
 import { daemon_get_health, daemon_probe_capabilities } from "./health.js";
@@ -55,6 +56,7 @@ import { log_get_policy, log_set_policy } from "./logging.js";
 import { evidence_export } from "./evidence.js";
 import { update_check, update_stage, migration_status, migration_run, plugin_list, about_get } from "./system.js";
 import { workspace_get_root, workspace_set_root } from "./workspace.js";
+import { attachment_import, attachment_stage } from "./attachment.js";
 
 /** The canonical registry of all known operations. */
 export function createContractRegistry(): ContractRegistry {
@@ -108,5 +110,7 @@ export function createContractRegistry(): ContractRegistry {
   r.register(about_get);
   r.register(workspace_get_root);
   r.register(workspace_set_root);
+  r.register(attachment_import);
+  r.register(attachment_stage);
   return r;
 }
