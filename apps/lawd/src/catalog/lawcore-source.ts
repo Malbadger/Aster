@@ -14,6 +14,8 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { EffortLevel, ModelDescriptor } from "@law/contracts";
 import type { ModelSourcePort } from "../ports.js";
+import type { CustomProviderSpecLike } from "../provider/custom-spec.js";
+import type { GeminiCliStatus } from "../provider/gemini-cli.js";
 
 const LOCAL_EFFORT: EffortLevel[] = ["low", "medium", "high"];
 const REMOTE_EFFORT: EffortLevel[] = ["minimal", "low", "medium", "high", "max"];
@@ -23,7 +25,11 @@ async function importCore<T>(lawRoot: string, rel: string): Promise<T> {
 }
 
 export class LawCoreModelSource implements ModelSourcePort {
-  constructor(private readonly lawRoot: string) {}
+  constructor(
+    private readonly lawRoot: string,
+    private readonly customProviders: () => CustomProviderSpecLike[] = () => [],
+    private readonly geminiStatus: () => Promise<GeminiCliStatus> = async () => ({ installed: false, configured: false }),
+  ) {}
 
   async descriptors(): Promise<ModelDescriptor[]> {
     const out: ModelDescriptor[] = [];
@@ -55,11 +61,11 @@ export class LawCoreModelSource implements ModelSourcePort {
     // from a provider name: OpenAI/Anthropic/Ollama are connection metadata.
     if (existsSync(join(this.lawRoot, "dist", "pi-adapter", "index.js"))) {
       try {
-        const piMod = await importCore<{ listAvailablePiModels: () => Promise<Array<{ provider: string; id: string; name: string; reasoning: boolean; vision: boolean }>> }>(
+        const piMod = await importCore<{ listAvailablePiModels: (custom?: CustomProviderSpecLike[]) => Promise<Array<{ provider: string; id: string; name: string; reasoning: boolean; vision: boolean }>> }>(
           this.lawRoot,
           "pi-adapter/index.js",
         );
-        for (const model of await piMod.listAvailablePiModels()) {
+        for (const model of await piMod.listAvailablePiModels(this.customProviders())) {
           if (model.provider === "ollama") continue;
           out.push({
             id: `${model.provider}:${model.id}`,
@@ -74,6 +80,20 @@ export class LawCoreModelSource implements ModelSourcePort {
       } catch {
         // Pi registry unavailable — local models still list.
       }
+    }
+
+    const gemini: GeminiCliStatus = await this.geminiStatus().catch(() => ({ installed: false, configured: false }));
+    if (gemini.installed) {
+      out.push({
+        id: "gemini-cli:auto",
+        displayName: "Gemini CLI Auto",
+        provider: "gemini-cli",
+        locality: "remote",
+        availability: gemini.configured ? "available" : "auth-needed",
+        effort: { supported: ["medium"] },
+        capabilities: { tools: true, vision: true },
+        note: gemini.configured ? `Official Gemini CLI${gemini.version ? ` ${gemini.version}` : ""}` : "Sign in with Google in Providers",
+      });
     }
 
     return out;

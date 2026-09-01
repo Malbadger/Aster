@@ -23,6 +23,15 @@ writeFileSync(join(out, "app/package.json"), JSON.stringify({
 execFileSync("npm", ["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"], {
   cwd: join(out, "app"), stdio: "inherit",
 });
+// Gemini CLI's keyring dependency publishes native binaries for every target.
+// This bundle is Linux x86_64 only; leaving foreign ELF files in the AppDir
+// makes linuxdeploy inspect (and fail to resolve) musl/ARM dependencies.
+const keytarPrebuilds = join(out, "app/node_modules/@github/keytar/prebuilds");
+for (const target of [
+  "darwin-arm64", "darwin-x64", "linux-arm", "linux-arm64", "linux-armv7l",
+  "linux-ia32", "linuxmusl-arm", "linuxmusl-arm64", "linuxmusl-x64",
+  "win32-arm64", "win32-ia32", "win32-x64",
+]) rmSync(join(keytarPrebuilds, target), { recursive: true, force: true });
 mkdirSync(join(out, "app/node_modules/@law/contracts"), { recursive: true });
 cpSync(join(root, "packages/contracts/dist"), join(out, "app/node_modules/@law/contracts/dist"), { recursive: true });
 cpSync(join(root, "packages/contracts/package.json"), join(out, "app/node_modules/@law/contracts/package.json"));

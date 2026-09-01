@@ -28,7 +28,7 @@ import {
   provider_remove_connection,
   provider_set_enabled,
   provider_check_credential,
-  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
+  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout, provider_gemini_cli_status,
   net_check_endpoint,
 } from "./provider.js";
 import {
@@ -74,6 +74,7 @@ export function createContractRegistry(): ContractRegistry {
   r.register(provider_auth_respond);
   r.register(provider_auth_cancel);
   r.register(provider_auth_logout);
+  r.register(provider_gemini_cli_status);
   r.register(net_check_endpoint);
   r.register(task_create);
   r.register(task_list);

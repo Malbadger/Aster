@@ -299,12 +299,26 @@ fn bundled_pi_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
     Some(command)
 }
 
+fn bundled_gemini_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
+    let resources = app.path().resource_dir().ok()?;
+    let node = resources.join("runtime/node");
+    let cli = resources.join("runtime/app/node_modules/@google/gemini-cli/bundle/gemini.js");
+    if !node.is_file() || !cli.is_file() { return None; }
+    let mut command = CommandBuilder::new(node);
+    command.arg(cli);
+    command.arg("--skip-trust");
+    command.env("GOOGLE_GENAI_USE_GCA", "true");
+    Some(command)
+}
+
 #[tauri::command]
 fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, directory: Option<String>, cols: u16, rows: u16, program: Option<String>) -> Result<String, String> {
     let pair = native_pty_system().openpty(PtySize { rows: rows.max(2), cols: cols.max(2), pixel_width: 0, pixel_height: 0 })
         .map_err(|error| format!("Could not allocate terminal: {error}"))?;
     let mut command = if program.as_deref() == Some("pi") {
         bundled_pi_command(&app).unwrap_or_else(|| CommandBuilder::new("pi"))
+    } else if program.as_deref() == Some("gemini") {
+        bundled_gemini_command(&app).unwrap_or_else(|| CommandBuilder::new("gemini"))
     } else {
         let shell = std::env::var("SHELL").ok().filter(|value| Path::new(value).is_absolute()).unwrap_or_else(|| "/bin/bash".into());
         CommandBuilder::new(shell)

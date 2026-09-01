@@ -12,11 +12,14 @@ import { LawCoreModelSource } from "./catalog/lawcore-source.js";
 import { FilePreferencesStore } from "./catalog/preferences.js";
 import { ProviderService } from "./provider/service.js";
 import { FileConnectionStore } from "./provider/connection-store.js";
+import { customProviderSpecs } from "./provider/custom-spec.js";
+import { GeminiCliService } from "./provider/gemini-cli.js";
 import { CredentialBroker } from "./security/credential-broker.js";
 import { SpawnCommandRunner } from "./security/command-runner.js";
 import { Orchestrator } from "./orchestrator/orchestrator.js";
 import { FileTaskStore } from "./orchestrator/task-store.js";
 import { LawCorePhaseRunner } from "./orchestrator/lawcore-runner.js";
+import { GeminiCliPhaseRunner, ProviderPhaseRunner } from "./orchestrator/gemini-cli-runner.js";
 import { EditorService } from "./editor/editor-service.js";
 import { nodeFs } from "./editor/node-fs.js";
 import { AutocompleteService } from "./editor/autocomplete.js";
@@ -34,21 +37,27 @@ import { pathToFileURL } from "node:url";
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
   const dataRoot = process.env.LAW_DATA_DIR ?? lawRoot;
+  const connectionStore = FileConnectionStore.forRoot(dataRoot);
+  const customProviders = () => customProviderSpecs(connectionStore.list());
+  const geminiCli = new GeminiCliService(lawRoot);
   const catalog = new CatalogService(
-    new LawCoreModelSource(lawRoot),
+    new LawCoreModelSource(lawRoot, customProviders, () => geminiCli.status()),
     FilePreferencesStore.forRoot(dataRoot),
   );
+  const authModule = await import(pathToFileURL(join(lawRoot, "dist", "pi-adapter", "index.js")).href) as { PiAuthBroker: new (custom?: () => unknown[]) => any };
+  const auth = new authModule.PiAuthBroker(customProviders);
   const providers = new ProviderService({
-    store: FileConnectionStore.forRoot(dataRoot),
+    store: connectionStore,
     broker: new CredentialBroker({ runner: new SpawnCommandRunner() }),
     // Local-first default: offline, no remote egress until a visible action grants it.
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
+    authConfigured: (provider) => auth.configured(provider),
   });
-  const authModule = await import(pathToFileURL(join(lawRoot, "dist", "pi-adapter", "index.js")).href) as { PiAuthBroker: new () => any };
-  const auth = new authModule.PiAuthBroker();
+  const piRunner = new LawCorePhaseRunner(lawRoot, (provider) => customProviders().find((item) => item.id === provider));
+  const phaseRunner = new ProviderPhaseRunner(piRunner, new GeminiCliPhaseRunner(geminiCli.cliPath));
   const orchestrator = new Orchestrator({
     store: FileTaskStore.forRoot(dataRoot),
-    runner: new LawCorePhaseRunner(lawRoot),
+    runner: phaseRunner,
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
     workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : lawRoot),
   });
@@ -82,7 +91,7 @@ async function main(): Promise<void> {
     () => ["Windows/macOS deferred (OPEN-D-002)", "Packaging and UAT run on Ubuntu 24.04 (AS-D-001)", "Local models require a loopback endpoint (e.g. Ollama)"],
     () => ["final visual baseline", "live provider login/paid use", "license/trademark review", "release signing and publication"],
   );
-  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about });
+  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about });
   const info = await daemon.start();
 
   // Structured, secret-free startup line (token is NEVER logged).

@@ -31,6 +31,38 @@ export type CredentialStatus = z.infer<typeof CredentialStatus>;
 export const ConnLocality = z.enum(["local", "remote"]);
 export type ConnLocality = z.infer<typeof ConnLocality>;
 
+/** Wire protocol used by a user-defined inference endpoint. */
+export const ProviderApi = z.enum([
+  "openai-completions",
+  "openai-responses",
+  "anthropic-messages",
+  "google-generative-ai",
+]);
+export type ProviderApi = z.infer<typeof ProviderApi>;
+
+export const ProviderModel = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  reasoning: z.boolean().default(false),
+  vision: z.boolean().default(false),
+  contextWindow: z.number().int().positive().default(128_000),
+  maxTokens: z.number().int().positive().default(16_384),
+});
+export type ProviderModel = z.infer<typeof ProviderModel>;
+
+/**
+ * Secret-free endpoint definition. Header values are config references (an
+ * environment-variable name or !command), never the resolved value.
+ */
+export const ProviderEndpoint = z.object({
+  baseUrl: z.string().url(),
+  api: ProviderApi,
+  models: z.array(ProviderModel).min(1),
+  authHeader: z.boolean().default(true),
+  headers: z.array(z.object({ name: z.string().min(1), valueReference: z.string().min(1) })).default([]),
+});
+export type ProviderEndpoint = z.infer<typeof ProviderEndpoint>;
+
 export const ProviderConnection = z.object({
   connectionId: z.string().min(1),
   provider: z.string().min(1),
@@ -43,6 +75,8 @@ export const ProviderConnection = z.object({
   referenceHint: z.string().optional(),
   /** ISO-8601 of the last availability check. */
   checkedAt: z.string().optional(),
+  /** Present for a user-defined local or enterprise model endpoint. */
+  endpoint: ProviderEndpoint.optional(),
 });
 export type ProviderConnection = z.infer<typeof ProviderConnection>;
 
@@ -58,6 +92,7 @@ export const AddConnectionInput = z.object({
    * daemon rejects anything matching a secret pattern (REQ-D-013).
    */
   reference: z.string().optional(),
+  endpoint: ProviderEndpoint.optional(),
 });
 export type AddConnectionInput = z.infer<typeof AddConnectionInput>;
 
@@ -144,6 +179,20 @@ export const provider_auth_cancel = defineOperation({
 export const provider_auth_logout = defineOperation({
   name: "provider_auth_logout", schemaVersion: 1, summary: "Remove Pi-owned credentials for a provider.", consequential: true,
   request: z.object({ provider: z.string() }), response: z.object({ loggedOut: z.boolean() }),
+});
+
+export const provider_gemini_cli_status = defineOperation({
+  name: "provider_gemini_cli_status",
+  schemaVersion: 1,
+  summary: "Report whether the bundled official Gemini CLI is installed and configured, without reading credentials.",
+  consequential: false,
+  request: z.object({}).strict(),
+  response: z.object({
+    installed: z.boolean(),
+    configured: z.boolean(),
+    version: z.string().optional(),
+    authType: z.string().optional(),
+  }),
 });
 
 // ---- Offline / network locality (RULE-D-006, REQ-D-009) ----

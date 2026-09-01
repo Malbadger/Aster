@@ -17,6 +17,26 @@ function svc(opts?: { env?: Record<string, string | undefined>; runner?: Command
 }
 
 describe("ProviderService — connections carry no secrets", () => {
+  it("persists a custom endpoint contract without credential values", () => {
+    const { service, store } = svc({ env: { ACME_KEY: FAKE_SECRET } });
+    const endpoint = {
+      baseUrl: "https://models.acme.example/v1",
+      api: "openai-completions" as const,
+      authHeader: true,
+      headers: [{ name: "x-tenant", valueReference: "ACME_TENANT" }],
+      models: [{ id: "acme-code", name: "Acme Code", reasoning: true, vision: false, contextWindow: 64_000, maxTokens: 8_192 }],
+    };
+    const { connection } = service.addConnection({ provider: "acme", label: "Acme", authMethod: "env-var", locality: "remote", reference: "ACME_KEY", endpoint });
+    expect(connection.endpoint).toEqual(endpoint);
+    expect(JSON.stringify(store.list())).not.toContain(FAKE_SECRET);
+    expect(() => service.addConnection({ provider: "acme", label: "Duplicate", authMethod: "none-local", locality: "local", endpoint })).toThrow(/already uses provider id/i);
+  });
+
+  it("rejects provider IDs that cannot be registered safely", () => {
+    const { service } = svc();
+    expect(() => service.addConnection({ provider: "Acme Provider", label: "Acme", authMethod: "none-local", locality: "local" })).toThrow(/provider id/i);
+  });
+
   it("refuses to add a connection whose reference contains a secret", () => {
     const { service } = svc();
     expect(() =>
@@ -36,6 +56,18 @@ describe("ProviderService — connections carry no secrets", () => {
   it("requires a reference for reference-based methods", () => {
     const { service } = svc();
     expect(() => service.addConnection({ provider: "a", label: "A", authMethod: "env-var", locality: "remote" })).toThrow(/reference/i);
+  });
+
+  it("checks Pi-owned API-key status without receiving the key", async () => {
+    const store = new MemoryConnectionStore();
+    const service = new ProviderService({
+      store,
+      broker: new CredentialBroker({ env: {} }),
+      netState: () => ({ offlineLocalOnly: false, remoteAuthorized: true }),
+      authConfigured: async (provider) => provider === "acme",
+    });
+    const { connection } = service.addConnection({ provider: "acme", label: "Acme", authMethod: "oauth-device", locality: "remote" });
+    expect((await service.checkCredential(connection.connectionId)).status).toBe("available");
   });
 
   it("resolves env-var availability without leaking the value", async () => {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { registerCustomProviders, type CustomProviderSpec } from './custom-provider.js';
 
 type AuthType = 'oauth' | 'api_key';
 type FlowStatus = 'running' | 'waiting' | 'completed' | 'error' | 'cancelled';
@@ -10,14 +11,27 @@ interface InternalFlow extends PublicAuthFlow { controller: AbortController; ans
 
 export class PiAuthBroker {
   private runtime?: ModelRuntime;
+  private readonly registered = new Set<string>();
   private readonly flows = new Map<string, InternalFlow>();
-  private async models(): Promise<ModelRuntime> { return this.runtime ??= await ModelRuntime.create({ allowModelNetwork: false }); }
+  constructor(private readonly customProviders: () => readonly CustomProviderSpec[] = () => []) {}
+  private async models(): Promise<ModelRuntime> {
+    const runtime = this.runtime ??= await ModelRuntime.create({ allowModelNetwork: false });
+    const current = this.customProviders();
+    const ids = new Set(current.map((provider) => provider.id));
+    for (const id of this.registered) if (!ids.has(id)) { runtime.unregisterProvider(id); this.registered.delete(id); }
+    registerCustomProviders(runtime, current);
+    for (const id of ids) this.registered.add(id);
+    return runtime;
+  }
   async methods() {
     const runtime = await this.models();
     return runtime.getProviders().map((provider) => ({
       id: provider.id, name: provider.name, configured: runtime.hasConfiguredAuth(provider.id),
       methods: ([provider.auth.oauth && 'oauth', provider.auth.apiKey?.login && 'api_key'].filter(Boolean) as AuthType[]),
     })).filter((provider) => provider.methods.length > 0);
+  }
+  async configured(provider: string): Promise<boolean> {
+    return (await this.models()).hasConfiguredAuth(provider);
   }
   async start(provider: string, authType: AuthType): Promise<PublicAuthFlow> {
     const runtime = await this.models();

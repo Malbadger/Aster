@@ -6,7 +6,9 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalOutput { sessionId: string; data: string }
 
-export function EmbeddedTerminal({ directory, launch }: { directory?: string; launch?: { program: "pi"; initialInput?: string } }): React.JSX.Element {
+export type TerminalProgram = "pi" | "gemini";
+
+export function EmbeddedTerminal({ directory, launch }: { directory?: string; launch?: { program: TerminalProgram; initialInput?: string } }): React.JSX.Element {
   const host = React.useRef<HTMLDivElement>(null);
   const [failure, setFailure] = React.useState<string>();
 

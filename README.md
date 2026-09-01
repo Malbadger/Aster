@@ -15,7 +15,7 @@ history, verification, and audit evidence behind one local policy boundary.
 Debian/Ubuntu:
 
 ```bash
-sudo apt install ./LAW_0.1.0_amd64.deb
+sudo apt install ./Aster_0.1.0_amd64.deb
 law-desktop
 ```
 
@@ -28,8 +28,8 @@ sudo apt remove law
 AppImage:
 
 ```bash
-chmod +x LAW_0.1.0_amd64.AppImage
-./LAW_0.1.0_amd64.AppImage
+chmod +x Aster_0.1.0_amd64.AppImage
+./Aster_0.1.0_amd64.AppImage
 ```
 
 The AppImage is portable and does not require installation.
@@ -113,11 +113,30 @@ process may not.
 
 ## Provider authentication
 
-Local Ollama requires no credential. Remote authentication belongs to the
-provider or Pi; Aster must not display or store credential values.
+Open **Settings → Providers** to connect an account, enter an API key, or add a
+compatible endpoint. Aster keeps every discovered model in the same selector;
+provider names are metadata, not selectable pseudo-models.
 
-The provider-management desktop surface is not yet connected to the main
-navigation. Configure subscription providers through the CLI:
+- **Claude, ChatGPT/OpenAI, Grok/xAI, and GitHub Copilot** use the login methods
+  exposed by the installed Pi runtime.
+- **Gemini account login** runs Google's official Gemini CLI inside the Aster
+  chat surface. Complete the interactive Google flow, choose **Done — refresh
+  models**, then select **Gemini CLI Auto**.
+- **Gemini API keys** use Pi's Google provider and remain separate from Google
+  account login.
+- **Ollama** is discovered automatically and needs no credential on loopback.
+
+To add a local server, proxy, or enterprise gateway, choose **Another service →
+Add provider** and enter its exact model IDs. Supported wire protocols are
+OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, and Google
+Generative AI. Credentials can be supplied through Pi's encrypted/provider-owned
+API-key flow, an environment-variable name, or an external secret command. The
+saved connection contains only endpoint metadata and the credential reference,
+never the resolved value.
+
+Remote authentication belongs to the provider, official Gemini CLI, or Pi;
+Aster must not display or store credential values in chat or logs. CLI setup is
+also available:
 
 ```bash
 cd /path/to/Aster
@@ -132,7 +151,7 @@ law doctor
 ```
 
 Login commands hand control to Pi's provider-owned flow. Never paste API keys,
-OAuth tokens, passwords, or session cookies into a Aster prompt or ordinary
+OAuth tokens, passwords, or session cookies into an Aster prompt or ordinary
 configuration file.
 
 The legacy Aster Core CLI preserves its original owner policy, including its
@@ -251,7 +270,7 @@ and paid-provider use may incur charges under the user's provider account.
 
 ```bash
 chmod +x LAW_0.1.0_amd64.AppImage
-./LAW_0.1.0_amd64.AppImage --appimage-extract-and-run
+./Aster_0.1.0_amd64.AppImage --appimage-extract-and-run
 ```
 
 ### Check versions
@@ -270,8 +289,7 @@ The following areas are incomplete in this pre-release:
 - repository cloning from the Start screen;
 - a fully interactive integrated terminal;
 - recursive file-tree browsing;
-- main-navigation integration for provider settings, logging settings, source
-  control, and the complete editable-diff experience;
+- logging settings, source control, and the complete editable-diff experience;
 - release signing and automatic updates;
 - final screen-reader, visual, usability, and public-release approval.
 - the private qualification corpus, internal build records, and development

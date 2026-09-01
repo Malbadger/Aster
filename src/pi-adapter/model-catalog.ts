@@ -1,4 +1,5 @@
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { registerCustomProviders, type CustomProviderSpec } from './custom-provider.js';
 
 /** Secret-free concrete models currently usable through Pi-owned auth. */
 export interface AvailablePiModel {
@@ -9,8 +10,9 @@ export interface AvailablePiModel {
   vision: boolean;
 }
 
-export async function listAvailablePiModels(): Promise<AvailablePiModel[]> {
+export async function listAvailablePiModels(customProviders: readonly CustomProviderSpec[] = []): Promise<AvailablePiModel[]> {
   const runtime = await ModelRuntime.create({ allowModelNetwork: false });
+  registerCustomProviders(runtime, customProviders);
   const models = await runtime.getAvailable();
   return models.map((model) => ({
     provider: model.provider,

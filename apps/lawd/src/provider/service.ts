@@ -23,6 +23,8 @@ export interface ProviderServiceDeps {
   redactor?: Redactor;
   /** Current network policy state (offline/remote authorization). */
   netState: () => NetPolicyState;
+  /** Pi-owned OAuth/API-key status; credential bytes never cross this seam. */
+  authConfigured?: (provider: string) => Promise<boolean>;
   now?: () => Date;
 }
 
@@ -46,6 +48,13 @@ export class ProviderService {
     // Zero-tolerance: refuse any input that contains a secret (REQ-D-013).
     this.redactor.assertClean(input, "connection input");
 
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(input.provider)) {
+      throw Object.assign(new Error("provider id must use lowercase letters, numbers, dots, underscores, or hyphens"), { code: "BAD_REQUEST" });
+    }
+    if (input.endpoint && this.deps.store.list().some((item) => item.provider === input.provider && item.endpoint)) {
+      throw Object.assign(new Error(`a custom endpoint already uses provider id "${input.provider}"`), { code: "CONFLICT" });
+    }
+
     const needsRef = REFERENCE_METHODS.has(input.authMethod);
     if (needsRef && (!input.reference || input.reference.trim().length === 0)) {
       const err = new Error(`auth method "${input.authMethod}" requires a non-secret reference`) as Error & { code: string };
@@ -62,6 +71,7 @@ export class ProviderService {
       enabled: true,
       status: "unknown",
       ...(needsRef && input.reference ? { referenceHint: input.reference.trim() } : {}),
+      ...(input.endpoint ? { endpoint: input.endpoint } : {}),
     };
     this.deps.store.upsert(connection);
     return { connection };
@@ -90,11 +100,13 @@ export class ProviderService {
       err.code = "NOT_FOUND";
       throw err;
     }
-    const status = await this.deps.broker.availability({
-      connectionId: conn.connectionId,
-      authMethod: conn.authMethod,
-      ...(conn.referenceHint ? { referenceHint: conn.referenceHint } : {}),
-    });
+    const status = conn.authMethod === "oauth-device" && this.deps.authConfigured
+      ? (await this.deps.authConfigured(conn.provider) ? "available" : "absent")
+      : await this.deps.broker.availability({
+        connectionId: conn.connectionId,
+        authMethod: conn.authMethod,
+        ...(conn.referenceHint ? { referenceHint: conn.referenceHint } : {}),
+      });
     const checkedAt = this.now().toISOString();
     this.deps.store.upsert({ ...conn, status, checkedAt });
     return { connectionId, status, checkedAt };

@@ -8,6 +8,7 @@
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
+import type { CustomProviderSpecLike } from "../provider/custom-spec.js";
 
 // Minimal shapes of the Aster Core boundary we rely on (kept local to avoid a
 // build-time dependency on Aster Core types).
@@ -36,10 +37,11 @@ interface PiAdapterLike {
 
 export class LawCorePhaseRunner implements PhaseRunner {
   private readonly sessions = new Map<string, { binding: string; session: PiSessionLike }>();
-  constructor(private readonly lawRoot: string) {}
+  constructor(private readonly lawRoot: string, private readonly customProvider: (provider: string) => CustomProviderSpecLike | undefined = () => undefined) {}
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
-    const binding = `${req.identity.provider}\0${req.identity.model}\0${req.identity.effort}\0${req.workspaceRoot}`;
+    const customProvider = this.customProvider(req.identity.provider);
+    const binding = `${req.identity.provider}\0${req.identity.model}\0${req.identity.effort}\0${req.workspaceRoot}\0${JSON.stringify(customProvider ?? null)}`;
     let retained = this.sessions.get(req.taskId);
     if (req.prompt.trim() === "/clear") {
       if (retained) await retained.session.dispose().catch(() => {});
@@ -62,6 +64,7 @@ export class LawCorePhaseRunner implements PhaseRunner {
         profile: { id: req.identity.model, provider: req.identity.provider, modelPolicy: { allow: [], deny: [] }, locality: "any", authKind: "none" },
         requestedModel: req.identity.model, effort: req.identity.effort, tools: req.tools, interceptor,
         workspaceRoot: req.workspaceRoot, allowMutation: req.allowMutation,
+        ...(customProvider ? { customProvider } : {}),
       });
       retained = { binding, session }; this.sessions.set(req.taskId, retained);
     }

@@ -1,4 +1,12 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+function privateBenchmarksUnavailable(): string | null {
+  return existsSync(join(process.cwd(), 'benchmarks', 'cases.json'))
+    ? null
+    : 'private exemplar corpus is intentionally not distributed with the source repository';
+}
 
 function liveContainerUnavailable(): string | null {
   for (const engine of ['docker', 'podman']) {
@@ -66,6 +74,7 @@ const CASES: Case[] = [
   { id: 'UAT-021', command: test('tests/graph/verify.test.ts') },
   {
     id: 'UAT-022',
+    environment: privateBenchmarksUnavailable,
     command: [
       'bash',
       '-lc',
@@ -73,7 +82,7 @@ const CASES: Case[] = [
     ],
   },
   { id: 'UAT-023', command: test('tests/evidence/export.test.ts') },
-  { id: 'UAT-024', command: test('tests/benchmark/exemplars.test.ts', 'tests/adapter/contract.test.ts') },
+  { id: 'UAT-024', environment: privateBenchmarksUnavailable, command: test('tests/benchmark/exemplars.test.ts', 'tests/adapter/contract.test.ts') },
   { id: 'UAT-025', command: test('tests/upgrade/upgrade.test.ts') },
   { id: 'UAT-026', command: test('tests/upgrade/upgrade.test.ts') },
   { id: 'UAT-027', command: test('tests/upgrade/upgrade.test.ts') },

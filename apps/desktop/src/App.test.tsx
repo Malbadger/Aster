@@ -18,6 +18,7 @@ function client(): IpcClient {
         case "task_list": return { tasks: [] };
         case "provider_list_connections": return { connections: [] };
         case "provider_auth_methods": return { providers: [] };
+        case "provider_gemini_cli_status": return { installed: true, configured: false, version: "0.57.0" };
         default: throw new Error(`unexpected test operation ${op.name}`);
       }
     },
@@ -45,6 +46,7 @@ describe("App", () => {
         task_list: { tasks: [] },
         provider_list_connections: { connections: [] },
         provider_auth_methods: { providers: [] },
+        provider_gemini_cli_status: { installed: true, configured: false, version: "0.57.0" },
       };
       return { protocol: 1, id, op, schemaVersion, ok: true, result: results[op] };
     });

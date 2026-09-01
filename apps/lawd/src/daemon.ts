@@ -18,7 +18,7 @@ import {
   provider_remove_connection,
   provider_set_enabled,
   provider_check_credential,
-  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
+  provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout, provider_gemini_cli_status,
   net_check_endpoint,
   task_create,
   task_list,
@@ -80,6 +80,7 @@ export interface DaemonOptions {
   catalog: CatalogService;
   providers: ProviderService;
   auth?: { methods(): Promise<unknown>; start(provider: string, authType: "oauth"|"api_key"): Promise<unknown>; get(flowId: string): unknown; respond(flowId: string, response: string): boolean; cancel(flowId: string): boolean; logout(provider: string): Promise<boolean> };
+  geminiCliStatus?: () => Promise<{ installed: boolean; configured: boolean; version?: string; authType?: string }>;
   orchestrator: Orchestrator;
   editor: EditorService;
   autocomplete: AutocompleteService;
@@ -106,6 +107,7 @@ export class Daemon {
   private readonly catalog: CatalogService;
   private readonly providers: ProviderService;
   private readonly auth: NonNullable<DaemonOptions["auth"]>;
+  private readonly geminiCliStatus: NonNullable<DaemonOptions["geminiCliStatus"]>;
   private readonly orchestrator: Orchestrator;
   private readonly editor: EditorService;
   private readonly autocomplete: AutocompleteService;
@@ -126,6 +128,7 @@ export class Daemon {
     this.catalog = opts.catalog;
     this.providers = opts.providers;
     this.auth = opts.auth ?? { methods: async () => [], start: async () => { throw new Error("Pi authentication unavailable"); }, get: () => { throw new Error("Pi authentication unavailable"); }, respond: () => false, cancel: () => false, logout: async () => false };
+    this.geminiCliStatus = opts.geminiCliStatus ?? (async () => ({ installed: false, configured: false }));
     this.orchestrator = opts.orchestrator;
     this.editor = opts.editor;
     this.autocomplete = opts.autocomplete;
@@ -190,6 +193,7 @@ export class Daemon {
     this.dispatcher.handle(provider_auth_respond.name, (payload) => { const p = payload as { flowId: string; response: string }; return { accepted: this.auth.respond(p.flowId, p.response) }; });
     this.dispatcher.handle(provider_auth_cancel.name, (payload) => ({ cancelled: this.auth.cancel((payload as { flowId: string }).flowId) }));
     this.dispatcher.handle(provider_auth_logout.name, async (payload) => ({ loggedOut: await this.auth.logout((payload as { provider: string }).provider) }));
+    this.dispatcher.handle(provider_gemini_cli_status.name, () => this.geminiCliStatus());
     this.dispatcher.handle(net_check_endpoint.name, (payload) => {
       const { target } = payload as { target: string };
       return this.providers.checkEndpoint(target);

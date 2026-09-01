@@ -37,6 +37,7 @@ import type {
   SessionSpec,
   TranscriptRef,
 } from './types.js';
+import { registerCustomProviders } from './custom-provider.js';
 
 const TESTED_RANGE = '0.84.4';
 
@@ -112,6 +113,7 @@ export class PiSdkAdapter implements PiAdapter {
     // Pi owns credentials; Aster never reads values. allowModelNetwork stays false so that
     // Ollama runs stay loopback-only and no catalog fetch happens implicitly (BN-003).
     const runtime = await ModelRuntime.create({ allowModelNetwork: false });
+    if (spec.customProvider) registerCustomProviders(runtime, [spec.customProvider]);
     if (spec.profile.provider === 'ollama') {
       // Pi has no built-in Ollama provider. Register only the exact, policy-approved model
       // for this session against Ollama's OpenAI-compatible loopback endpoint. No catalog

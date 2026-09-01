@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { ProviderConnections } from "./ProviderConnections.js";
 import type { ProviderConnection } from "@law/contracts";
 
@@ -20,35 +20,59 @@ describe("ProviderConnections", () => {
 
   it("shows a reference field only for reference-based auth methods", () => {
     render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop} />);
-    // default authMethod is none-local -> no reference field
-    expect(screen.queryByLabelText("Reference")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Auth method"), { target: { value: "env-var" } });
-    expect(screen.getByLabelText("Reference")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    expect(screen.queryByLabelText("Credential reference")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Credentials"), { target: { value: "env-var" } });
+    expect(screen.getByLabelText("Credential reference")).toBeInTheDocument();
   });
 
   it("submits the add form and toggles enabled", () => {
     const onAdd = vi.fn();
     const onSetEnabled = vi.fn();
     render(<ProviderConnections connections={conns} state="ready" onAdd={onAdd} onRemove={noop} onSetEnabled={onSetEnabled} onCheck={noop} />);
-    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "ollama" } });
-    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "My Local" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
-    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ provider: "ollama", label: "My Local", authMethod: "none-local" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.change(screen.getByLabelText("Provider ID"), { target: { value: "acme" } });
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Acme Enterprise" } });
+    fireEvent.change(screen.getByLabelText("API URL"), { target: { value: "https://llm.acme.example/v1" } });
+    fireEvent.change(screen.getByLabelText("Model IDs"), { target: { value: "acme-code, acme-review" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Add provider" }).at(-1)!);
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "acme", label: "Acme Enterprise", authMethod: "oauth-device",
+      endpoint: expect.objectContaining({ baseUrl: "https://llm.acme.example/v1", api: "openai-completions", models: [expect.objectContaining({ id: "acme-code" }), expect.objectContaining({ id: "acme-review" })] }),
+    }));
     fireEvent.click(screen.getByRole("button", { name: "Enable" })); // c2 is disabled
     expect(onSetEnabled).toHaveBeenCalledWith("c2", true);
   });
 
   it("starts supported account and API-key authentication inside the app", () => {
     const onAuthenticate = vi.fn();
+    const onGeminiCliLogin = vi.fn();
     render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop}
+      geminiCli={{ installed: true, configured: false, version: "0.57.0" }}
       authProviders={[
         { id: "anthropic", name: "Anthropic", methods: ["oauth", "api_key"], configured: false },
         { id: "google", name: "Google", methods: ["api_key"], configured: false },
-      ]} onAuthenticate={onAuthenticate} />);
-    fireEvent.click(screen.getAllByRole("button", { name: "Sign in" })[0]!);
+      ]} onAuthenticate={onAuthenticate} onGeminiCliLogin={onGeminiCliLogin} />);
+    const claude = screen.getByText("Claude").closest("article")!;
+    fireEvent.click(within(claude).getByRole("button", { name: "Sign in" }));
     expect(onAuthenticate).toHaveBeenCalledWith("anthropic", "oauth");
     const gemini = screen.getByText("Gemini").closest("article")!;
-    fireEvent.click(gemini.querySelector("button")!);
+    fireEvent.click(within(gemini).getByRole("button", { name: "Sign in" }));
+    expect(onGeminiCliLogin).toHaveBeenCalledOnce();
+    fireEvent.click(within(gemini).getByRole("button", { name: "API key" }));
     expect(onAuthenticate).toHaveBeenCalledWith("google", "api_key");
+  });
+
+  it("prefills a compatible service and adapts API-key headers to its protocol", () => {
+    render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop} />);
+    const perplexity = screen.getByText("Perplexity").closest("article")!;
+    fireEvent.click(within(perplexity).getByRole("button", { name: "Configure" }));
+    expect(screen.getByLabelText("Provider ID")).toHaveValue("perplexity");
+    expect(screen.getByLabelText("API URL")).toHaveValue("https://api.perplexity.ai");
+    expect(screen.getByLabelText("Protocol")).toHaveValue("openai-completions");
+    fireEvent.click(screen.getByRole("button", { name: "Advanced headers" }));
+    expect(screen.getByRole("checkbox")).toBeChecked();
+    fireEvent.change(screen.getByLabelText("Protocol"), { target: { value: "anthropic-messages" } });
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
   });
 });

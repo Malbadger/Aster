@@ -1,6 +1,6 @@
 import React from "react";
 import type { ProviderConnection } from "@law/contracts";
-import { ProviderConnections, type AddConnectionForm } from "./ProviderConnections.js";
+import { ProviderConnections, type AddConnectionForm, type GeminiCliStatusView } from "./ProviderConnections.js";
 import type { AuthProvider } from "./AuthCard.js";
 
 export type LawTheme = "graphite" | "light" | "midnight" | "high-contrast"
@@ -17,6 +17,7 @@ export interface SettingsPanelProps {
   providerState: "empty" | "loading" | "error" | "ready";
   providerError?: string;
   authProviders: AuthProvider[];
+  geminiCli?: GeminiCliStatusView;
   onTab: (tab: SettingsTab) => void;
   onTheme: (theme: LawTheme) => void;
   editorEngine: EditorEngine;
@@ -27,6 +28,7 @@ export interface SettingsPanelProps {
   onSetConnectionEnabled: (id: string, enabled: boolean) => void;
   onCheckConnection: (id: string) => void;
   onAuthenticate: (provider: string, method: "oauth" | "api_key") => void;
+  onGeminiCliLogin?: () => void;
 }
 
 const THEMES: Array<{ id: LawTheme; name: string; description: string; colors: string[] }> = [
@@ -65,7 +67,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
             </button>)}
           </div></section>}
           {props.tab === "providers" && <ProviderConnections connections={props.connections} state={props.providerState} errorMessage={props.providerError}
-            authProviders={props.authProviders} onAdd={props.onAddConnection} onRemove={props.onRemoveConnection} onSetEnabled={props.onSetConnectionEnabled} onCheck={props.onCheckConnection} onAuthenticate={props.onAuthenticate} />}
+            authProviders={props.authProviders} geminiCli={props.geminiCli} onAdd={props.onAddConnection} onRemove={props.onRemoveConnection} onSetEnabled={props.onSetConnectionEnabled} onCheck={props.onCheckConnection} onAuthenticate={props.onAuthenticate} onGeminiCliLogin={props.onGeminiCliLogin} />}
           {props.tab === "about" && <section><h2>About Aster</h2><p>Local Agent Workbench is a provider-neutral desktop environment for Pi, local models, and connected model accounts.</p><div className="settings-row"><div><strong>Code editor</strong><p>Aster embeds the open-source VSCodium workbench and synchronizes its palette with the application.</p></div><span>VSCodium</span></div><div className="settings-row"><div><strong>Workspace layout</strong><p>Pane visibility and your resized dimensions are remembered only on this device.</p></div><span>Local</span></div><div className="settings-row"><div><strong>Offline operation</strong><p>Local Ollama models remain available without signing in to a remote provider.</p></div><span>Supported</span></div></section>}
         </main>
       </div>

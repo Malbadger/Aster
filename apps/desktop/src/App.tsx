@@ -9,6 +9,7 @@ import {
   workspace_set_root,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
   provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
+  provider_gemini_cli_status,
   type CapabilityProbe, type ChatEvent, type EffortLevel,
   type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow,
 } from "@law/contracts";
@@ -16,7 +17,7 @@ import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
 import { ChatPanel } from "./components/ChatPanel.js";
 import { AppMenuBar } from "./components/AppMenuBar.js";
-import { EmbeddedTerminal } from "./components/EmbeddedTerminal.js";
+import { EmbeddedTerminal, type TerminalProgram } from "./components/EmbeddedTerminal.js";
 import { VscodiumEditor } from "./components/VscodiumEditor.js";
 import { SettingsPanel, type EditorEngine, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
 import type { AddConnectionForm } from "./components/ProviderConnections.js";
@@ -26,6 +27,8 @@ import { StartSurface, type StartAction } from "./components/StartSurface.js";
 import { TaskHistory } from "./components/TaskHistory.js";
 import { WorkspaceShell } from "./components/WorkspaceShell.js";
 import { AuthCard, type AuthProvider } from "./components/AuthCard.js";
+import { GeminiCliLogin } from "./components/GeminiCliLogin.js";
+import type { GeminiCliStatusView } from "./components/ProviderConnections.js";
 import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, type Panel, type Preset } from "./layout/layout.js";
 import asterMark from "./assets/aster-mark-muted-transparent.svg";
 
@@ -74,7 +77,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [settingsTab, setSettingsTab] = React.useState<SettingsTab>();
   const [theme, setTheme] = React.useState<LawTheme>(() => (localStorage.getItem(THEME_KEY) as LawTheme | null) ?? "graphite");
   const [editorEngine, setEditorEngine] = React.useState<EditorEngine>("vscode-oss");
-  const [terminalLaunch, setTerminalLaunch] = React.useState<{ program: "pi"; initialInput?: string }>();
+  const [terminalLaunch, setTerminalLaunch] = React.useState<{ program: TerminalProgram; initialInput?: string }>();
   const [connections, setConnections] = React.useState<ProviderConnection[]>([]);
   const [providerState, setProviderState] = React.useState<"empty" | "loading" | "error" | "ready">("loading");
   const [providerError, setProviderError] = React.useState<string>();
@@ -82,6 +85,8 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [authFlow, setAuthFlow] = React.useState<AuthFlow>();
   const [authOpen, setAuthOpen] = React.useState(false);
   const [authBrowserError, setAuthBrowserError] = React.useState<string>();
+  const [geminiCli, setGeminiCli] = React.useState<GeminiCliStatusView>();
+  const [geminiLoginOpen, setGeminiLoginOpen] = React.useState(false);
   const openedAuthUrl = React.useRef<string>();
   const refreshedAuthFlow = React.useRef<string>();
   const selected = models.find((model) => model.id === selectedId);
@@ -113,6 +118,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     return result.providers;
   }, [client]);
 
+  const refreshGeminiCli = React.useCallback(async () => {
+    const status = await client.call(provider_gemini_cli_status, {});
+    setGeminiCli(status);
+    return status;
+  }, [client]);
+
   const boot = React.useCallback(async () => {
     setError(undefined); setView("boot");
     try {
@@ -122,13 +133,13 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       const detected = await client.call(daemon_probe_capabilities, { refresh: false });
       setProbe(detected);
       setBootDetail("Loading models and task history…");
-      await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders(), refreshAuthProviders()]);
+      await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders(), refreshAuthProviders(), refreshGeminiCli()]);
       const ready = detected.capabilities.filter((capability) => !capability.optional).every((capability) => capability.state === "ready");
       setView(ready ? "workspace" : "setup");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
-  }, [client, refreshAuthProviders, refreshCatalog, refreshProviders, refreshTasks]);
+  }, [client, refreshAuthProviders, refreshCatalog, refreshGeminiCli, refreshProviders, refreshTasks]);
 
   React.useEffect(() => { void boot(); }, [boot]);
   React.useEffect(() => { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }, [layout]);
@@ -245,6 +256,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       if (name === "new") { newChat(); return; }
       if (name === "login") {
         local("user", text);
+        if (["gemini", "gemini-cli", "google"].includes(args.toLowerCase())) { startGeminiCliLogin(); return; }
         const result = await client.call(provider_auth_methods, {}); setAuthProviders(result.providers); setAuthOpen(true); setAuthFlow(undefined);
         const requested = args.toLowerCase() === "claude-pro" ? "anthropic" : ["chatgpt", "openai"].includes(args.toLowerCase()) ? "openai-codex" : args.toLowerCase();
         const provider = requested && result.providers.find((item) => item.id === requested);
@@ -341,16 +353,30 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   }
 
   async function addConnection(form: AddConnectionForm): Promise<void> {
-    try { await client.call(provider_add_connection, form); await refreshProviders(); }
+    try {
+      await client.call(provider_add_connection, form);
+      await Promise.all([refreshProviders(), refreshAuthProviders(), refreshCatalog(query)]);
+      if (form.endpoint && form.authMethod === "oauth-device") await authenticateProvider(form.provider, "api_key");
+    }
     catch (cause) { setProviderError(cause instanceof Error ? cause.message : String(cause)); setProviderState("error"); }
   }
 
   async function removeConnection(connectionId: string): Promise<void> {
-    await client.call(provider_remove_connection, { connectionId }); await refreshProviders();
+    await client.call(provider_remove_connection, { connectionId }); await Promise.all([refreshProviders(), refreshCatalog(query)]);
   }
 
   async function setConnectionEnabled(connectionId: string, enabled: boolean): Promise<void> {
-    await client.call(provider_set_enabled, { connectionId, enabled }); await refreshProviders();
+    await client.call(provider_set_enabled, { connectionId, enabled }); await Promise.all([refreshProviders(), refreshCatalog(query)]);
+  }
+
+  function startGeminiCliLogin(): void {
+    setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
+    setAuthOpen(false); setGeminiLoginOpen(true);
+  }
+
+  async function finishGeminiCliLogin(): Promise<void> {
+    setGeminiLoginOpen(false);
+    await Promise.all([refreshGeminiCli(), refreshCatalog(query)]);
   }
 
   async function checkConnection(connectionId: string): Promise<void> {
@@ -388,7 +414,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
+    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={geminiLoginOpen
+      ? <GeminiCliLogin directory={workspaceRoot} onDone={() => void finishGeminiCliLogin()} onCancel={() => setGeminiLoginOpen(false)} />
+      : authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
       onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
       onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
@@ -446,10 +474,10 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
       {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} onSettings={() => setSettingsTab("appearance")} /></main>}
     </div>
-    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders}
+    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli}
       onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
-      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} />}
+      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} />}
   </div>;
 }
 

@@ -17,6 +17,7 @@ import type {
   ProviderProfile,
   ToolInterceptor,
 } from '../types.js';
+import type { CustomProviderSpec } from './custom-provider.js';
 
 export type ContainerEngine = 'docker' | 'podman' | 'none';
 
@@ -66,6 +67,8 @@ export interface SessionSpec {
   workspaceRoot: string;
   /** Whether the session may mutate files (false ⇒ read-only host, REQ-012). */
   allowMutation: boolean;
+  /** Optional secret-free custom endpoint registered for this session. */
+  customProvider?: CustomProviderSpec;
 }
 
 /** A pointer into Pi session storage — never the transcript content (REQ-017). */

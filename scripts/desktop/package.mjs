@@ -4,7 +4,7 @@
 // never fabricates a PASS. Full SBOM/license inventory is added in BUILD-D-022.
 import { run, runCapture, have, notRun, fail, pass } from "./_lib.mjs";
 import { createHash } from "node:crypto";
-import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 if (!have("cargo")) notRun("PACKAGE", "cargo/Rust toolchain not found");
@@ -21,6 +21,11 @@ let themes = run("npx", ["vsce", "package", "--no-dependencies", "--skip-license
 if (themes !== 0) fail("PACKAGE", `Aster editor theme packaging failed (exit ${themes})`);
 let prep = run("node", ["scripts/desktop/prepare-runtime.mjs"]);
 if (prep !== 0) fail("PACKAGE", `runtime preparation failed (exit ${prep})`);
+// Tauri/linuxdeploy may reuse its AppDir between builds. Clear it so removed
+// native dependencies (for example foreign-architecture CLI prebuilds) cannot
+// survive from a previous package and poison the next dependency scan.
+rmSync("apps/desktop/src-tauri/target/release/bundle", { recursive: true, force: true });
+rmSync("apps/desktop/src-tauri/target/release/runtime", { recursive: true, force: true });
 
 let code = run("npm", ["--workspace", "apps/desktop", "run", "tauri", "--", "build"]);
 if (code !== 0) fail("PACKAGE", `tauri build failed (exit ${code})`);
