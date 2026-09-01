@@ -21,9 +21,9 @@ export function makeInterceptionExtension(
   onDecision?: (d: { tool: string; callId: string; denied: boolean; reason: string }) => void,
 ) {
   return (pi: ExtensionAPI): void => {
-    pi.on('tool_call', (event: ToolCallEvent): ToolCallEventResult => {
+    pi.on('tool_call', async (event: ToolCallEvent): Promise<ToolCallEventResult> => {
       const call = { tool: event.toolName, input: event.input, callId: event.toolCallId };
-      const decision = interceptor(call);
+      const decision = await interceptor(call);
       onDecision?.({
         tool: call.tool,
         callId: call.callId,

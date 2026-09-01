@@ -19,7 +19,7 @@ import { SpawnCommandRunner } from "./security/command-runner.js";
 import { Orchestrator } from "./orchestrator/orchestrator.js";
 import { FileTaskStore } from "./orchestrator/task-store.js";
 import { LawCorePhaseRunner } from "./orchestrator/lawcore-runner.js";
-import { GeminiCliPhaseRunner, ProviderPhaseRunner } from "./orchestrator/gemini-cli-runner.js";
+import { AntigravityPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./orchestrator/gemini-cli-runner.js";
 import { EditorService } from "./editor/editor-service.js";
 import { nodeFs } from "./editor/node-fs.js";
 import { AutocompleteService } from "./editor/autocomplete.js";
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     authConfigured: (provider) => auth.configured(provider),
   });
   const piRunner = new LawCorePhaseRunner(lawRoot, (provider) => customProviders().find((item) => item.id === provider));
-  const phaseRunner = new ProviderPhaseRunner(piRunner, new GeminiCliPhaseRunner(geminiCli.cliPath));
+  const phaseRunner = new ProviderPhaseRunner(piRunner, new GeminiCliPhaseRunner(geminiCli.cliPath), new AntigravityPhaseRunner(geminiCli.antigravityPath));
   const orchestrator = new Orchestrator({
     store: FileTaskStore.forRoot(dataRoot),
     runner: phaseRunner,

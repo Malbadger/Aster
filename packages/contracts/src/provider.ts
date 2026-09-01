@@ -184,7 +184,7 @@ export const provider_auth_logout = defineOperation({
 export const provider_gemini_cli_status = defineOperation({
   name: "provider_gemini_cli_status",
   schemaVersion: 1,
-  summary: "Report whether the bundled official Gemini CLI is installed and configured, without reading credentials.",
+  summary: "Report supported Google coding CLIs and available models without reading credentials.",
   consequential: false,
   request: z.object({}).strict(),
   response: z.object({
@@ -192,6 +192,11 @@ export const provider_gemini_cli_status = defineOperation({
     configured: z.boolean(),
     version: z.string().optional(),
     authType: z.string().optional(),
+    antigravityInstalled: z.boolean().optional(),
+    antigravityConfigured: z.boolean().optional(),
+    antigravityVersion: z.string().optional(),
+    migrationRequired: z.boolean().optional(),
+    models: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   }),
 });
 

@@ -66,7 +66,7 @@ when external network access is unavailable.
 Repository cloning is visible but not connected in this pre-release build.
 Clone with Git first, then choose **Open Folder**.
 
-### Select a model and effort
+### Select a model, effort, and mode
 
 The model selector is beside the chat composer. All discovered models appear in
 one list, regardless of provider.
@@ -74,10 +74,22 @@ one list, regardless of provider.
 1. Open the model selector.
 2. Search for or choose a model such as `Qwen:latest`.
 3. Select an effort level supported by that model.
-4. Enter the task in chat and send it.
+4. Select the execution mode beside the model.
+5. Enter the task in chat and send it.
 
-Model and effort are locked when a phase starts. Changing either affects a
-later phase or task, not the active phase.
+Provider, model, effort, and mode are locked when a phase starts. Changing any
+of them affects a later phase, not the active phase. The modes are:
+
+- **Plan** — read-only investigation and proposed steps.
+- **Manual** — pause mutating tools in chat for explicit approval (default).
+- **Auto** — perform policy-compliant workspace edits and checks without each
+  approval prompt.
+- **Full access** — run configured tools without per-action approval. Aster
+  shows a warning before selecting it; provider and platform boundaries still
+  apply.
+
+Use `/mode plan`, `/mode manual`, `/mode auto`, or `/mode full` from chat as an
+alternative to the selector. `/plan` also forces its phase into read-only mode.
 
 ### Request multi-model work
 
@@ -94,8 +106,10 @@ command, network, or credential permissions.
 
 ### Edit and verify files
 
-Open a file from the Start screen. The editor reports whether it is saved,
-modified, verified, or stale.
+Open **Editor** at any time to start VSCodium in the current workspace, or in
+your home directory when no workspace is selected. Opening an individual file
+is optional. The editor reports whether tracked files are saved, modified,
+verified, or stale.
 
 - **Save** writes the current editor contents locally.
 - **Run checks** verifies the saved version.
@@ -119,11 +133,12 @@ provider names are metadata, not selectable pseudo-models.
 
 - **Claude, ChatGPT/OpenAI, Grok/xAI, and GitHub Copilot** use the login methods
   exposed by the installed Pi runtime.
-- **Gemini account login** runs Google's official Gemini CLI inside the Aster
-  chat surface. Complete the interactive Google flow, choose **Done — refresh
-  models**, then select **Gemini CLI Auto**.
-- **Gemini API keys** use Pi's Google provider and remain separate from Google
-  account login.
+- **Gemini personal-account login** uses Google's supported Antigravity CLI
+  inside the Aster chat surface. If it is missing, Aster opens Google's official
+  installation guide. Complete the Google flow, choose **Done — refresh
+  models**, then select one of the concrete models Antigravity reports.
+- **Gemini API keys and enterprise Gemini CLI authentication** remain separate
+  supported paths through Pi/the legacy enterprise CLI.
 - **Ollama** is discovered automatically and needs no credential on loopback.
 
 To add a local server, proxy, or enterprise gateway, choose **Another service →

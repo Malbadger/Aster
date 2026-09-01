@@ -4,13 +4,13 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
   model_list_catalog, model_set_favorite, task_cancel, task_create,
-  task_get_events, task_list, task_send_message, task_delete,
+  task_get_events, task_list, task_send_message, task_delete, task_respond_approval,
   fs_read_file, fs_write_file, verify_run,
   workspace_set_root,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
   provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   provider_gemini_cli_status,
-  type CapabilityProbe, type ChatEvent, type EffortLevel,
+  type CapabilityProbe, type ChatEvent, type EffortLevel, type ExecutionMode,
   type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow,
 } from "@law/contracts";
 import { createIpcClient, type IpcClient } from "./ipc/client.js";
@@ -37,6 +37,7 @@ export interface AppProps { client?: IpcClient }
 const LAYOUT_KEY = "law.desktop.layout.v2";
 const THEME_KEY = "law.desktop.theme.v1";
 const EDITOR_KEY = "law.desktop.editor.v1";
+const MODE_KEY = "aster.desktop.mode.v1";
 const defaultClient = createIpcClient(tauriTransport);
 
 function loadLayout(): Layout {
@@ -46,8 +47,8 @@ function loadLayout(): Layout {
   } catch { return { ...DEFAULT_LAYOUT }; }
 }
 
-function identityFor(model: ModelDescriptor | undefined, effort: EffortLevel): PhaseIdentity | undefined {
-  return model ? { provider: model.provider, model: model.id, effort } : undefined;
+function identityFor(model: ModelDescriptor | undefined, effort: EffortLevel, mode: ExecutionMode): PhaseIdentity | undefined {
+  return model ? { provider: model.provider, model: model.id, effort, mode } : undefined;
 }
 
 export function App({ client = defaultClient }: AppProps): React.JSX.Element {
@@ -60,6 +61,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [query, setQuery] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string>();
   const [effort, setEffort] = React.useState<EffortLevel>("medium");
+  const [mode, setMode] = React.useState<ExecutionMode>(() => (localStorage.getItem(MODE_KEY) as ExecutionMode | null) ?? "manual");
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [taskQuery, setTaskQuery] = React.useState("");
   const [taskId, setTaskId] = React.useState<string>();
@@ -70,6 +72,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [activePanel, setActivePanel] = React.useState<Panel>("chat");
   const [modelOpen, setModelOpen] = React.useState(false);
   const [workspaceRoot, setWorkspaceRoot] = React.useState<string>();
+  const [homeDirectory, setHomeDirectory] = React.useState<string>();
   const [openFile, setOpenFile] = React.useState<string>();
   const [fileContent, setFileContent] = React.useState("");
   const [savedContent, setSavedContent] = React.useState("");
@@ -133,6 +136,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       const detected = await client.call(daemon_probe_capabilities, { refresh: false });
       setProbe(detected);
       setBootDetail("Loading models and task history…");
+      setHomeDirectory(await Promise.resolve(invoke<string>("home_directory")).catch(() => undefined));
       await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders(), refreshAuthProviders(), refreshGeminiCli()]);
       const ready = detected.capabilities.filter((capability) => !capability.optional).every((capability) => capability.state === "ready");
       setView(ready ? "workspace" : "setup");
@@ -171,6 +175,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     void Promise.all([refreshCatalog(query), refreshAuthProviders()]);
   }, [authFlow?.flowId, authFlow?.status, query, refreshAuthProviders, refreshCatalog]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
+  React.useEffect(() => { localStorage.setItem(MODE_KEY, mode); }, [mode]);
 
   React.useEffect(() => {
     if (!taskId || !running) return;
@@ -253,6 +258,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         if (!selected.effort.supported.includes(requested)) { local("error", `${selected.displayName} does not support “${args}”. Available: ${selected.effort.supported.join(", ")}.`); return; }
         setEffort(requested); local("assistant", `Effort set to ${requested} for ${selected.displayName}.`); return;
       }
+      if (name === "mode") {
+        local("user", text);
+        const aliases: Record<string, ExecutionMode> = { plan: "plan", manual: "manual", auto: "auto", full: "full-access", "full-access": "full-access" };
+        if (!args) { local("assistant", `Current mode: ${mode}. Use /mode plan, /mode manual, /mode auto, or /mode full.`); return; }
+        const requested = aliases[args.toLowerCase()];
+        if (!requested) { local("error", `Unknown mode “${args}”. Available: plan, manual, auto, full.`); return; }
+        if (requested === "full-access" && !window.confirm("Full access runs configured tools without per-action approval. Continue?")) { local("assistant", "Mode change cancelled."); return; }
+        setMode(requested); local("assistant", `Mode set to ${requested}. It will be locked for the next phase.`); return;
+      }
       if (name === "new") { newChat(); return; }
       if (name === "login") {
         local("user", text);
@@ -278,11 +292,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       let targetTaskId = taskId;
       if (!targetTaskId) {
         const label = workspaceRoot ? workspaceRoot.split("/").filter(Boolean).at(-1) ?? workspaceRoot : "New chat";
-        const created = await client.call(task_create, { title: label, ...(workspaceRoot ? { workspaceId: workspaceRoot } : {}), defaultIdentity: identityFor(selected, effort) });
+        const created = await client.call(task_create, { title: label, ...(workspaceRoot ? { workspaceId: workspaceRoot } : {}), defaultIdentity: identityFor(selected, effort, mode) });
         targetTaskId = created.task.taskId;
         setTaskId(targetTaskId);
       }
-      const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort) });
+      const result = await client.call(task_send_message, { taskId: targetTaskId, text, identity: identityFor(selected, effort, mode) });
       setEvents((await client.call(task_get_events, { taskId: targetTaskId, sinceSeq: 0 })).events);
       setRunning(result.status === "running"); await refreshTasks();
     } catch (cause) {
@@ -370,6 +384,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   }
 
   function startGeminiCliLogin(): void {
+    if (!geminiCli?.antigravityInstalled) {
+      setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
+      setError("Google moved personal Gemini CLI accounts to Antigravity CLI. The official installation guide has been opened; install it, then return to Providers and choose Sign in.");
+      void Promise.resolve(invoke<string>("open_external_url", { url: "https://antigravity.google/docs/cli/install/" })).catch(() => {});
+      return;
+    }
     setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
     setAuthOpen(false); setGeminiLoginOpen(true);
   }
@@ -411,17 +431,30 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         onSelect={(id) => { setSelectedId(id); setModelOpen(false); }}
         onToggleFavorite={(modelId, favorite) => void client.call(model_set_favorite, { modelId, favorite }).then((result) => setFavorites(result.favorites))} /></div>}
     </div>
+    <label className={`mode-control mode-${mode}`} title="Execution permission mode">
+      <span>Mode</span>
+      <select aria-label="Execution mode" value={mode} onChange={(event) => {
+        const next = event.target.value as ExecutionMode;
+        if (next === "full-access" && !window.confirm("Full access runs configured tools without per-action approval. Continue?")) return;
+        setMode(next);
+      }}>
+        <option value="plan">Plan</option><option value="manual">Manual</option><option value="auto">Auto</option><option value="full-access">Full access</option>
+      </select>
+    </label>
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} controls={controls} interactive={geminiLoginOpen
+    chat: <ChatPanel key={conversationKey} events={events} running={running} onSend={(text) => void send(text)} onStop={() => void stop()} onRespondApproval={(approvalId, approved) => {
+      if (!taskId) return;
+      void client.call(task_respond_approval, { taskId, approvalId, approved }).then(async () => setEvents((await client.call(task_get_events, { taskId, sinceSeq: 0 })).events));
+    }} controls={controls} interactive={geminiLoginOpen
       ? <GeminiCliLogin directory={workspaceRoot} onDone={() => void finishGeminiCliLogin()} onCancel={() => setGeminiLoginOpen(false)} />
       : authOpen ? <AuthCard providers={authProviders} flow={authFlow} browserError={authBrowserError}
       onStart={(provider, authType) => void client.call(provider_auth_start, { provider, authType }).then((result) => setAuthFlow(result.flow))}
       onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
-    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : undefined)} theme={theme} />,
+    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : homeDirectory)} theme={theme} />,
     fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks.filter((task) => task.title.toLowerCase().includes(taskQuery.trim().toLowerCase()))} state={tasks.length ? "ready" : "empty"} query={taskQuery} onQueryChange={setTaskQuery} onOpen={(id) => void openTask(id)} onDelete={(id) => void deleteChat(id)} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,
@@ -430,7 +463,6 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   };
 
   const toggleSurface = (panel: Panel) => {
-    if (panel === "editor" && !openFile) { void startAction("open-file"); return; }
     if (panel === "terminal") setTerminalLaunch(undefined);
     setActivePanel(panel);
     setLayout((old) => {

@@ -200,6 +200,12 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
 .primary { border-color: var(--law-color-accent); background: var(--law-color-accent); color: var(--law-color-on-accent); }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--law-color-danger); color: var(--law-color-danger); background: color-mix(in srgb, var(--law-color-danger) 7%, var(--law-color-bg-panel)); }
 .composer-controls { display: flex; align-items: center; gap: 8px; width: 100%; }
+.mode-control { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 8px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); color: var(--law-color-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.mode-control select { border: 0; outline: 0; background: transparent; color: var(--law-color-text); font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
+.mode-full-access { border-color: var(--law-color-danger); }
+.approval-actions { display: flex; gap: 7px; margin-top: 8px; }
+.approval-actions button { padding: 5px 10px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-elevated); color: var(--law-color-text); cursor: pointer; }
+.approval-actions button:first-child { border-color: var(--law-color-accent); color: var(--law-color-accent-strong); }
 .model-popover-anchor { position: relative; }
 .model-trigger { min-width: 176px; display: flex; flex-direction: column; align-items: flex-start; padding: 5px 9px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
 .model-trigger small { color: var(--law-color-text-faint); font-size: 10px; }

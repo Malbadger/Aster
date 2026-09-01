@@ -38,6 +38,7 @@ import {
   task_send_message,
   task_get_events,
   task_cancel,
+  task_respond_approval,
   task_delete,
 } from "./task.js";
 import {
@@ -82,6 +83,7 @@ export function createContractRegistry(): ContractRegistry {
   r.register(task_send_message);
   r.register(task_get_events);
   r.register(task_cancel);
+  r.register(task_respond_approval);
   r.register(task_delete);
   r.register(fs_read_file);
   r.register(fs_write_file);

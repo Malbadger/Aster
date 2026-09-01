@@ -17,4 +17,11 @@ describe('Pi SDK event mapping', () => {
       text: 'Hello back.',
     });
   });
+
+  it('surfaces an assistant provider error when the response has no text', () => {
+    expect(mapPiEvent(event({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: 'Extra usage is required.' } }))).toEqual({
+      kind: 'error',
+      message: 'Extra usage is required.',
+    });
+  });
 });

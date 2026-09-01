@@ -1,8 +1,8 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { GeminiCliPhaseRunner, ProviderPhaseRunner } from "./gemini-cli-runner.js";
+import { AntigravityPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./gemini-cli-runner.js";
 import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
 
 async function collect(runner: PhaseRunner, req: PhaseRunRequest): Promise<PhaseEvent[]> {
@@ -47,6 +47,23 @@ describe("GeminiCliPhaseRunner", () => {
     expect(invocations[0]).toContain("--session-id");
     expect(invocations[1]).toContain("--resume");
     expect(invocations[0]).toContain("plan");
+  });
+
+  it("runs Antigravity JSONL with the selected model, effort, and permission mode", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-antigravity-runner-"));
+    const argvLog = join(dir, "argv.json");
+    const executable = join(dir, "agy");
+    writeFileSync(executable, `#!/usr/bin/env node
+      require('node:fs').writeFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)));
+      console.log(JSON.stringify({type:'init', conversation_id:'conversation-1'}));
+      console.log(JSON.stringify({type:'step_update', step_type:'agent_response', text_delta:'Ready.'}));
+      console.log(JSON.stringify({type:'result', status:'success'}));
+    `);
+    chmodSync(executable, 0o755);
+    const req = { ...request("agy-task"), identity: { provider: "antigravity", model: "antigravity:gemini-code", effort: "high", mode: "auto" } as const };
+    expect(await collect(new AntigravityPhaseRunner(executable), req)).toEqual([{ kind: "assistant", text: "Ready." }, { kind: "settled" }]);
+    const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
+    expect(args).toEqual(expect.arrayContaining(["--model", "gemini-code", "--effort", "high", "--mode=accept-edits"]));
   });
 
   it("turns CLI failures into provider-neutral error events", async () => {

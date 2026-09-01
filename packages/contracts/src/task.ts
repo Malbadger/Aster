@@ -25,11 +25,16 @@ export type PhaseStatus = z.infer<typeof PhaseStatus>;
 export const TaskStatus = z.enum(["active", "completed", "blocked", "error", "cancelled"]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
+export const ExecutionMode = z.enum(["plan", "manual", "auto", "full-access"]);
+export type ExecutionMode = z.infer<typeof ExecutionMode>;
+
 /** Immutable provider/model/effort identity locked at phase start. */
 export const PhaseIdentity = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
   effort: EffortLevel,
+  /** Optional only for persisted pre-mode tasks; the runtime defaults these to manual. */
+  mode: ExecutionMode.optional(),
 });
 export type PhaseIdentity = z.infer<typeof PhaseIdentity>;
 
@@ -169,6 +174,15 @@ export const task_cancel = defineOperation({
   consequential: true,
   request: z.object({ taskId: z.string().min(1) }),
   response: z.object({ taskStatus: TaskStatus, cancellation: CancellationResult }),
+});
+
+export const task_respond_approval = defineOperation({
+  name: "task_respond_approval",
+  schemaVersion: 1,
+  summary: "Approve or deny one pending Manual-mode tool call.",
+  consequential: true,
+  request: z.object({ taskId: z.string().min(1), approvalId: z.string().min(1), approved: z.boolean() }),
+  response: z.object({ accepted: z.boolean() }),
 });
 
 export const task_delete = defineOperation({

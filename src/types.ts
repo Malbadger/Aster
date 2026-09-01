@@ -65,7 +65,7 @@ export interface InterceptableToolCall {
   callId: string;
 }
 
-export type ToolInterceptor = (call: InterceptableToolCall) => ToolDecision;
+export type ToolInterceptor = (call: InterceptableToolCall) => ToolDecision | Promise<ToolDecision>;
 
 /** Observed provider/model identity, recorded into the trace (REQ-008). */
 export interface ObservedIdentity {

@@ -11,7 +11,7 @@ export interface AddConnectionForm {
   endpoint?: ProviderEndpoint;
 }
 
-export interface GeminiCliStatusView { installed: boolean; configured: boolean; version?: string; authType?: string }
+export interface GeminiCliStatusView { installed: boolean; configured: boolean; version?: string; authType?: string; antigravityInstalled?: boolean; antigravityConfigured?: boolean; antigravityVersion?: string; migrationRequired?: boolean; models?: Array<{ id: string; name: string }> }
 
 export interface ProviderConnectionsProps {
   connections: ProviderConnection[];
@@ -77,9 +77,9 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
         })}</div>
       </article>)}
       <article>
-        <span><strong>Gemini</strong><small>{props.geminiCli?.configured ? `Google account connected${props.geminiCli.version ? ` · CLI ${props.geminiCli.version}` : ""}` : "Google account or Gemini API key"}</small></span>
+        <span><strong>Gemini</strong><small>{props.geminiCli?.antigravityConfigured ? `Google account connected${props.geminiCli.antigravityVersion ? ` · Antigravity ${props.geminiCli.antigravityVersion}` : ""}` : props.geminiCli?.migrationRequired ? "Personal Gemini CLI login must migrate to Antigravity" : "Google account, enterprise login, or Gemini API key"}</small></span>
         <div className="provider-auth-actions">
-          <button type="button" disabled={!props.geminiCli?.installed} onClick={props.onGeminiCliLogin}>{props.geminiCli?.configured ? "Reconnect" : "Sign in"}</button>
+          <button type="button" onClick={props.onGeminiCliLogin}>{props.geminiCli?.antigravityInstalled ? (props.geminiCli.antigravityConfigured ? "Reconnect" : "Sign in") : "Install Antigravity"}</button>
           <button type="button" disabled={!props.authProviders?.find((provider) => provider.id === "google")?.methods.includes("api_key")} onClick={() => props.onAuthenticate?.("google", "api_key")}>API key</button>
         </div>
       </article>

@@ -41,7 +41,7 @@ export class LawCorePhaseRunner implements PhaseRunner {
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const customProvider = this.customProvider(req.identity.provider);
-    const binding = `${req.identity.provider}\0${req.identity.model}\0${req.identity.effort}\0${req.workspaceRoot}\0${JSON.stringify(customProvider ?? null)}`;
+    const binding = `${req.identity.provider}\0${req.identity.model}\0${req.identity.effort}\0${req.identity.mode ?? "manual"}\0${req.workspaceRoot}\0${JSON.stringify(customProvider ?? null)}`;
     let retained = this.sessions.get(req.taskId);
     if (req.prompt.trim() === "/clear") {
       if (retained) await retained.session.dispose().catch(() => {});
@@ -56,8 +56,8 @@ export class LawCorePhaseRunner implements PhaseRunner {
       const adapter = mod.createPiAdapter();
       // The retained interceptor still calls the daemon-owned gate. Task phases
       // are serialized, and their workspace/tool surface is stable per binding.
-      const interceptor = (call: { tool: string; input: unknown; callId: string }) => {
-        const d = req.gate({ tool: call.tool, input: call.input, callId: call.callId });
+      const interceptor = async (call: { tool: string; input: unknown; callId: string }) => {
+        const d = await req.gate({ tool: call.tool, input: call.input, callId: call.callId });
         return { decision: d.allow ? "allow" : "deny", reason: d.reason };
       };
       const session = await adapter.openSession({

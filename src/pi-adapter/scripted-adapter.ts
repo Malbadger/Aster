@@ -141,7 +141,7 @@ class ScriptedSession implements PiSession {
         yield { kind: 'usage', input: step.input, output: step.output };
       } else {
         const callId = `${this.sessionId}-tc-${++callSeq}`;
-        const decision = this.spec.interceptor({ tool: step.tool, input: step.input, callId });
+        const decision = await this.spec.interceptor({ tool: step.tool, input: step.input, callId });
         if (decision.decision === 'deny') {
           yield { kind: 'tool_denied', tool: step.tool, reason: decision.reason, callId };
           continue;

@@ -323,9 +323,13 @@ export function mapPiEvent(ev: AgentSessionEvent): LawEvent | null {
       return text ? { kind: 'assistant_message', text } : null;
     }
     case 'message_end': {
-      const message = e.message as { role?: string } | undefined;
+      const message = e.message as { role?: string; stopReason?: string; errorMessage?: string } | undefined;
       const role = message?.role ?? (typeof e.role === 'string' ? e.role : undefined);
       if (role !== 'assistant') return null;
+      const errorMessage = message?.errorMessage ?? (typeof e.errorMessage === 'string' ? e.errorMessage : undefined);
+      if (message?.stopReason === 'error' || errorMessage) {
+        return { kind: 'error', message: errorMessage || 'The provider ended the response with an error.' };
+      }
       const text = extractText(e);
       return text ? { kind: 'assistant_message', text } : null;
     }

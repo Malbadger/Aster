@@ -48,7 +48,7 @@ describe("ProviderConnections", () => {
     const onAuthenticate = vi.fn();
     const onGeminiCliLogin = vi.fn();
     render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop}
-      geminiCli={{ installed: true, configured: false, version: "0.57.0" }}
+      geminiCli={{ installed: true, configured: false, version: "0.57.0", antigravityInstalled: true }}
       authProviders={[
         { id: "anthropic", name: "Anthropic", methods: ["oauth", "api_key"], configured: false },
         { id: "google", name: "Google", methods: ["api_key"], configured: false },

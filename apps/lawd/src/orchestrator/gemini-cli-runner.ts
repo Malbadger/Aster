@@ -75,10 +75,65 @@ export class GeminiCliPhaseRunner implements PhaseRunner {
   }
 }
 
+/** Runs Google's supported Antigravity CLI for individual Google accounts. */
+export class AntigravityPhaseRunner implements PhaseRunner {
+  private readonly conversations = new Map<string, string>();
+  constructor(private readonly executable = 'agy') {}
+
+  async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
+    const selected = req.identity.model.startsWith('antigravity:') ? req.identity.model.slice('antigravity:'.length) : req.identity.model;
+    const args = ['-p', req.prompt, '--output-format', 'stream-json', '--effort', normalizeEffort(req.identity.effort)];
+    if (selected && selected !== 'auto') args.push('--model', selected);
+    const prior = this.conversations.get(req.taskId);
+    if (prior) args.push('--conversation', prior);
+    const mode = req.identity.mode ?? 'manual';
+    if (mode === 'plan') args.push('--mode=plan');
+    if (mode === 'auto') args.push('--mode=accept-edits');
+    if (mode === 'full-access') args.push('--mode=accept-edits', '--dangerously-skip-permissions');
+
+    const child = spawn(this.executable, args, { cwd: req.workspaceRoot, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const exitPromise = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
+    const onAbort = () => child.kill('SIGTERM');
+    req.signal.addEventListener('abort', onAbort, { once: true });
+    let assistant = '';
+    let stderr = '';
+    let fatal: string | undefined;
+    child.stderr.on('data', (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
+    const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+    try {
+      for await (const line of lines) {
+        if (!line.trim()) continue;
+        let event: Record<string, any>;
+        try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
+        const conversationId = event.conversation_id ?? event.conversationId;
+        if (typeof conversationId === 'string') this.conversations.set(req.taskId, conversationId);
+        if (event.type === 'step_update' && event.step_type === 'agent_response') assistant += String(event.text_delta ?? event.text ?? '');
+        if (event.type === 'step_update' && event.step_type === 'tool_call') yield { kind: 'tool_call', tool: String(event.tool_name ?? event.name ?? 'antigravity-tool'), input: event.parameters ?? event.input, callId: String(event.tool_call_id ?? event.id ?? '') };
+        if (event.type === 'step_update' && event.step_type === 'tool_result') yield { kind: 'tool_result', tool: String(event.tool_name ?? 'antigravity-tool'), ok: !event.error, summary: String(event.output ?? event.error ?? ''), callId: String(event.tool_call_id ?? event.id ?? '') };
+        if (event.type === 'result' && event.status === 'error') fatal = String(event.error?.message ?? event.message ?? 'Antigravity CLI run failed');
+        if (event.type === 'result' && !assistant && typeof event.response === 'string') assistant = event.response;
+      }
+      const exit = await exitPromise;
+      if (req.signal.aborted) return;
+      if (assistant.trim()) yield { kind: 'assistant', text: assistant.trim() };
+      if (fatal || exit !== 0) { yield { kind: 'error', message: fatal ?? (stderr.trim() || `Antigravity CLI exited with code ${exit}`) }; return; }
+      yield { kind: 'settled' };
+    } finally {
+      req.signal.removeEventListener('abort', onAbort); lines.close();
+    }
+  }
+}
+
+function normalizeEffort(effort: string): 'low' | 'medium' | 'high' {
+  if (effort === 'minimal' || effort === 'low') return 'low';
+  if (effort === 'max' || effort === 'high') return 'high';
+  return 'medium';
+}
+
 /** Routes a phase to a provider-specific runner without leaking that choice into graph state. */
 export class ProviderPhaseRunner implements PhaseRunner {
-  constructor(private readonly pi: PhaseRunner, private readonly gemini: PhaseRunner) {}
+  constructor(private readonly pi: PhaseRunner, private readonly gemini: PhaseRunner, private readonly antigravity: PhaseRunner = gemini) {}
   run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
-    return (req.identity.provider === 'gemini-cli' ? this.gemini : this.pi).run(req);
+    return (req.identity.provider === 'gemini-cli' ? this.gemini : req.identity.provider === 'antigravity' ? this.antigravity : this.pi).run(req);
   }
 }

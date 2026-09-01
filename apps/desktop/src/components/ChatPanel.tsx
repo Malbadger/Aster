@@ -12,6 +12,7 @@ export interface ChatPanelProps {
   running: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
+  onRespondApproval?: (approvalId: string, approved: boolean) => void;
   controls?: React.ReactNode;
   interactive?: React.ReactNode;
 }
@@ -56,6 +57,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
     const previous = conversationalEvents[index - 1];
     return !(previous?.kind === "user" && Boolean(event.text) && previous.text?.trim() === event.text?.trim());
   });
+  const resolvedApprovals = new Set(props.events.filter((event) => event.kind === "status" && typeof event.data?.approvalId === "string").map((event) => String(event.data?.approvalId)));
   const submit = () => {
     const t = text.trim();
     if (!t || props.running) return;
@@ -77,6 +79,10 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
             <span className="chat-event-copy">
               {e.text}
               {identity && <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>}
+              {e.kind === "approval" && typeof e.data?.approvalId === "string" && !resolvedApprovals.has(e.data.approvalId) && <span className="approval-actions">
+                <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), true)}>Approve</button>
+                <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), false)}>Deny</button>
+              </span>}
             </span>
           </li>;
         })}

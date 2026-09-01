@@ -22,7 +22,7 @@ export interface ToolDecision {
 }
 
 /** Pre-execution gate applied to every tool call (policy lives in the daemon). */
-export type ToolGate = (call: { tool: string; input: unknown; callId: string }) => ToolDecision;
+export type ToolGate = (call: { tool: string; input: unknown; callId: string }) => ToolDecision | Promise<ToolDecision>;
 
 export interface PhaseRunRequest {
   /** Stable chat identity; one Pi session is retained per task. */

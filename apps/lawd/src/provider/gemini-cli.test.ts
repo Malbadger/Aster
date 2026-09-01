@@ -20,16 +20,16 @@ function fixture(authType?: string) {
 describe("GeminiCliService", () => {
   it("reports the bundled official CLI and Google account selection", async () => {
     const { root, home } = fixture("oauth-personal");
-    await expect(new GeminiCliService(root, home).status()).resolves.toEqual({ installed: true, configured: true, version: "0.57.0", authType: "oauth-personal" });
+    await expect(new GeminiCliService(root, home).status()).resolves.toMatchObject({ installed: true, configured: false, version: "0.57.0", authType: "oauth-personal", antigravityInstalled: false, migrationRequired: true });
   });
 
   it("does not mistake API-key configuration for account login", async () => {
     const { root, home } = fixture("gemini-api-key");
-    await expect(new GeminiCliService(root, home).status()).resolves.toEqual({ installed: true, configured: false, version: "0.57.0", authType: "gemini-api-key" });
+    await expect(new GeminiCliService(root, home).status()).resolves.toMatchObject({ installed: true, configured: true, version: "0.57.0", authType: "gemini-api-key", antigravityInstalled: false });
   });
 
   it("reports a missing packaged CLI cleanly", async () => {
     const root = mkdtempSync(join(tmpdir(), "aster-no-gemini-"));
-    await expect(new GeminiCliService(root, root).status()).resolves.toEqual({ installed: false, configured: false });
+    await expect(new GeminiCliService(root, root).status()).resolves.toMatchObject({ installed: false, configured: false, antigravityInstalled: false });
   });
 });

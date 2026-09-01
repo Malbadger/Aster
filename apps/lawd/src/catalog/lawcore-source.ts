@@ -83,16 +83,28 @@ export class LawCoreModelSource implements ModelSourcePort {
     }
 
     const gemini: GeminiCliStatus = await this.geminiStatus().catch(() => ({ installed: false, configured: false }));
-    if (gemini.installed) {
+    if (gemini.antigravityInstalled) {
+      const discovered = gemini.models?.length ? gemini.models : [{ id: "auto", name: "Gemini (Antigravity Auto)" }];
+      for (const model of discovered) out.push({
+        id: `antigravity:${model.id}`,
+        displayName: model.name,
+        provider: "antigravity",
+        locality: "remote",
+        availability: gemini.antigravityConfigured ? "available" : "auth-needed",
+        effort: { supported: ["low", "medium", "high"] },
+        capabilities: { tools: true, vision: true },
+        note: gemini.antigravityConfigured ? `Google Antigravity CLI${gemini.antigravityVersion ? ` ${gemini.antigravityVersion}` : ""}` : "Sign in with Google in Providers",
+      });
+    } else if (gemini.installed) {
       out.push({
         id: "gemini-cli:auto",
-        displayName: "Gemini CLI Auto",
+        displayName: "Gemini CLI (API / Enterprise)",
         provider: "gemini-cli",
         locality: "remote",
-        availability: gemini.configured ? "available" : "auth-needed",
+        availability: gemini.configured ? "available" : "unavailable",
         effort: { supported: ["medium"] },
         capabilities: { tools: true, vision: true },
-        note: gemini.configured ? `Official Gemini CLI${gemini.version ? ` ${gemini.version}` : ""}` : "Sign in with Google in Providers",
+        note: gemini.configured ? `Gemini CLI${gemini.version ? ` ${gemini.version}` : ""}` : "Personal Google login moved to Antigravity CLI",
       });
     }
 

@@ -11,7 +11,7 @@ class ScriptedRunner implements PhaseRunner {
   constructor(private readonly tool = "read_file", private readonly input: unknown = { path: "a.ts" }) {}
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     yield { kind: "assistant", text: `Working on: ${req.prompt}` };
-    const decision = req.gate({ tool: this.tool, input: this.input, callId: "c1" });
+    const decision = await req.gate({ tool: this.tool, input: this.input, callId: "c1" });
     if (decision.allow) {
       yield { kind: "tool_call", tool: this.tool, input: this.input, callId: "c1" };
       yield { kind: "tool_result", tool: this.tool, ok: true, summary: "ok", callId: "c1" };
@@ -130,5 +130,30 @@ describe("Orchestrator", () => {
     expect(orch.deleteTask(task.taskId)).toEqual({ deleted: true });
     expect(orch.listTasks("").tasks).toHaveLength(0);
     expect(() => orch.getEvents(task.taskId, 0)).toThrow(/no such task/);
+  });
+
+  it("makes Plan read-only, Manual approval-driven, and Auto non-interactive", async () => {
+    const plan = make(new ScriptedRunner("write_file", { path: "a.ts" }));
+    const planTask = plan.orch.createTask({ title: "plan", defaultIdentity: { ...IDENTITY, mode: "plan" } }).task;
+    plan.orch.sendMessage({ taskId: planTask.taskId, text: "change it" });
+    await plan.orch.idle(planTask.taskId);
+    expect(plan.orch.getEvents(planTask.taskId, 0).events.some((event) => event.kind === "tool_denied" && event.text?.includes("read-only"))).toBe(true);
+
+    const manual = make(new ScriptedRunner("write_file", { path: "a.ts" }));
+    const manualTask = manual.orch.createTask({ title: "manual", defaultIdentity: { ...IDENTITY, mode: "manual" } }).task;
+    manual.orch.sendMessage({ taskId: manualTask.taskId, text: "change it" });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const approval = manual.orch.getEvents(manualTask.taskId, 0).events.find((event) => event.kind === "approval");
+    expect(approval?.data?.approvalId).toBeTypeOf("string");
+    expect(manual.orch.respondApproval(manualTask.taskId, String(approval?.data?.approvalId), true)).toBe(true);
+    await manual.orch.idle(manualTask.taskId);
+    expect(manual.orch.getEvents(manualTask.taskId, 0).events.some((event) => event.kind === "tool_result")).toBe(true);
+
+    const auto = make(new ScriptedRunner("write_file", { path: "a.ts" }));
+    const autoTask = auto.orch.createTask({ title: "auto", defaultIdentity: { ...IDENTITY, mode: "auto" } }).task;
+    auto.orch.sendMessage({ taskId: autoTask.taskId, text: "change it" });
+    await auto.orch.idle(autoTask.taskId);
+    expect(auto.orch.getEvents(autoTask.taskId, 0).events.some((event) => event.kind === "approval")).toBe(false);
+    expect(auto.orch.getEvents(autoTask.taskId, 0).events.some((event) => event.kind === "tool_result")).toBe(true);
   });
 });

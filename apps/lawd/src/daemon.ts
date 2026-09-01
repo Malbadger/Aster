@@ -26,6 +26,7 @@ import {
   task_send_message,
   task_get_events,
   task_cancel,
+  task_respond_approval,
   task_delete,
   fs_read_file,
   fs_write_file,
@@ -220,6 +221,10 @@ export class Daemon {
     this.dispatcher.handle(task_cancel.name, async (payload) => {
       const { taskId } = payload as { taskId: string };
       return this.orchestrator.cancel(taskId);
+    });
+    this.dispatcher.handle(task_respond_approval.name, (payload) => {
+      const { taskId, approvalId, approved } = payload as { taskId: string; approvalId: string; approved: boolean };
+      return { accepted: this.orchestrator.respondApproval(taskId, approvalId, approved) };
     });
     this.dispatcher.handle(task_delete.name, (payload) => {
       const { taskId } = payload as { taskId: string };

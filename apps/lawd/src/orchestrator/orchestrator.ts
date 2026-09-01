@@ -39,12 +39,19 @@ interface RunHandle {
   acknowledgedCancel: boolean;
 }
 
-const DEFAULT_TOOLS = ["read_file", "write_file", "list_dir", "search"];
+interface PendingApproval {
+  taskId: string;
+  resolve: (decision: { allow: boolean; reason: string }) => void;
+}
+
+const DEFAULT_TOOLS = ["read", "write", "edit", "grep", "find", "ls", "bash", "read_file", "write_file", "list_dir", "search"];
+const MUTATING_TOOL = /(^|_)(write|edit|delete|remove|move|rename|mkdir|touch|bash|shell|command|execute|apply)(_|$)/i;
 
 export class Orchestrator {
   private readonly redactor: Redactor;
   private readonly now: () => Date;
   private readonly running = new Map<string, RunHandle>();
+  private readonly approvals = new Map<string, PendingApproval>();
 
   constructor(private readonly deps: OrchestratorDeps) {
     this.redactor = deps.redactor ?? new Redactor();
@@ -140,12 +147,13 @@ export class Orchestrator {
     // Deterministic local commands (not phases). Unknown slash commands pass
     // through to Pi so installed extensions retain their native command surface.
     if (parsed.command === "help") {
-      this.append(task.taskId, { kind: "assistant", taskId: task.taskId, text: "Commands: /plan, /run, /audit, /model, /effort, /login, /logout, /compact, /session, /name, /auto-compact, /auto-retry, /clear. Plain text runs through the retained Pi session." });
+      this.append(task.taskId, { kind: "assistant", taskId: task.taskId, text: "Commands: /plan, /run, /audit, /model, /effort, /mode, /login, /logout, /compact, /session, /name, /auto-compact, /auto-retry, /clear. Plain text runs through the retained Pi session." });
       return { accepted: true, interpretation: parsed.interpretation, status: "completed", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
 
     // Phase-running path (NL, /run, /plan, /audit).
-    const identity = input.identity ?? task.defaultIdentity;
+    const selectedIdentity = input.identity ?? task.defaultIdentity;
+    const identity = selectedIdentity && parsed.command === "plan" ? { ...selectedIdentity, mode: "plan" as const } : selectedIdentity;
     if (!identity) {
       this.append(task.taskId, { kind: "status", taskId: task.taskId, text: "Select a model before running (no default identity for this task)." });
       return { accepted: false, interpretation: parsed.interpretation, status: "pending", reason: "no model selected", nextSeq: this.deps.store.nextSeq(task.taskId) };
@@ -165,7 +173,7 @@ export class Orchestrator {
       kind: "status",
       taskId: task.taskId,
       phaseId: phase.phaseId,
-      text: `Phase started with ${identity.provider}/${identity.model} (effort ${identity.effort}).`,
+      text: `Phase started with ${identity.provider}/${identity.model} (effort ${identity.effort}, mode ${identity.mode ?? "manual"}).`,
       data: { identity },
     });
 
@@ -183,6 +191,25 @@ export class Orchestrator {
       netState: this.deps.netState,
     });
 
+    const mode = phase.identity.mode ?? "manual";
+    const toolGate = async (call: { tool: string; input: unknown; callId: string }) => {
+      const base = gate.decide(call);
+      if (!base.allow) return base;
+      const mutating = MUTATING_TOOL.test(call.tool);
+      if (!mutating) return base;
+      if (mode === "plan") return { allow: false, reason: "Plan mode is read-only." };
+      if (mode === "auto" || mode === "full-access") return base;
+      const approvalId = this.id("approval");
+      this.append(task.taskId, {
+        kind: "approval", taskId: task.taskId, phaseId: phase.phaseId,
+        text: `${call.tool} wants permission to make a change.`,
+        data: { approvalId, tool: call.tool, input: call.input, status: "pending" },
+      });
+      return new Promise<{ allow: boolean; reason: string }>((resolve) => {
+        this.approvals.set(approvalId, { taskId: task.taskId, resolve });
+      });
+    };
+
     let lastError: string | undefined;
     let cancelled = false;
     try {
@@ -192,8 +219,8 @@ export class Orchestrator {
         prompt,
         tools: this.deps.allowedTools ?? DEFAULT_TOOLS,
         workspaceRoot: this.deps.workspaceRootFor(task),
-        allowMutation: true,
-        gate: gate.asToolGate(),
+        allowMutation: mode !== "plan",
+        gate: toolGate,
         signal: controller.signal,
       })) {
         if (controller.signal.aborted) {
@@ -265,11 +292,27 @@ export class Orchestrator {
       const t = this.requireTask(taskId);
       return { taskStatus: t.status, cancellation: "confirmed" };
     }
+    for (const [id, pending] of this.approvals) {
+      if (pending.taskId === taskId) {
+        pending.resolve({ allow: false, reason: "Denied because the task was cancelled." });
+        this.approvals.delete(id);
+      }
+    }
     handle.controller.abort();
     await handle.promise.catch(() => {});
     const t = this.requireTask(taskId);
     // A tool may have been mid-flight; scripted runs stop cleanly (confirmed).
     return { taskStatus: t.status, cancellation: "confirmed" };
+  }
+
+  respondApproval(taskId: string, approvalId: string, approved: boolean): boolean {
+    this.requireTask(taskId);
+    const pending = this.approvals.get(approvalId);
+    if (!pending || pending.taskId !== taskId) return false;
+    this.approvals.delete(approvalId);
+    pending.resolve({ allow: approved, reason: approved ? "Approved by the user in Manual mode." : "Denied by the user in Manual mode." });
+    this.append(taskId, { kind: "status", taskId, text: approved ? "Tool change approved." : "Tool change denied.", data: { approvalId, status: approved ? "approved" : "denied" } });
+    return true;
   }
 
   /** Test helper: await the running turn, if any. */
