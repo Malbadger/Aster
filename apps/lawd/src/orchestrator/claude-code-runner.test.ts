@@ -89,9 +89,27 @@ describe("ClaudeCodePhaseRunner", () => {
     `); chmodSync(executable, 0o755);
     await collect(new ClaudeCodePhaseRunner(executable), request("orchestration-auto", "Use aster_delegate_start_mutating", "auto"));
     const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
+    expect(args).toEqual(expect.arrayContaining(["--permission-mode", "auto"]));
     expect(args).toEqual(expect.arrayContaining([
       "--allowedTools",
       "mcp__law-ollama__aster_list_models,mcp__law-ollama__aster_delegate_start,mcp__law-ollama__aster_delegate_get,mcp__law-ollama__aster_delegate_start_mutating",
     ]));
+  });
+
+  it("starts a new Claude session when the user changes execution mode", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-claude-code-mode-"));
+    const argvLog = join(dir, "argv.jsonl"); const executable = join(dir, "claude");
+    writeFileSync(executable, `#!/usr/bin/env node
+      require('node:fs').appendFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+      console.log(JSON.stringify({type:'system', subtype:'init'}));
+      console.log(JSON.stringify({type:'result', is_error:false, result:'ok', usage:{input_tokens:1, output_tokens:1}}));
+    `); chmodSync(executable, 0o755);
+    const runner = new ClaudeCodePhaseRunner(executable);
+    await collect(runner, request("mode-change", "Review", "plan"));
+    await collect(runner, request("mode-change", "Implement", "auto"));
+    const calls = readFileSync(argvLog, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[]);
+    expect(calls[0]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "plan"]));
+    expect(calls[1]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "auto"]));
+    expect(calls[1]).not.toContain("--resume");
   });
 });

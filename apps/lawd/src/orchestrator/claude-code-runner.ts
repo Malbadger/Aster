@@ -15,7 +15,7 @@ function sessionUuid(taskId: string): string {
  * prompts; Aster supplies the message and renders the structured reply.
  */
 export class ClaudeCodePhaseRunner implements PhaseRunner {
-  private readonly sessions = new Set<string>();
+  private readonly sessions = new Map<string, string>();
 
   constructor(
     private readonly executable = process.env.CLAUDE_CODE_PATH ?? "claude",
@@ -25,21 +25,24 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const selected = req.identity.model.startsWith("anthropic:") ? req.identity.model.slice("anthropic:".length) : req.identity.model;
-    const sessionId = sessionUuid(req.taskId);
+    const mode = req.identity.mode ?? "manual";
+    const delegation = /aster_(?:list_models|delegate_start|delegate_get)/i.test(req.prompt);
+    const binding = `${selected}\0${req.identity.effort}\0${mode}\0${req.workspaceRoot}\0${delegation}`;
+    const sessionId = sessionUuid(`${req.taskId}:${binding}`);
     const args = [
       "-p", promptWithAttachments(req, true),
       "--verbose", "--output-format", "stream-json",
-      "--permission-mode", permissionMode(req.identity.mode ?? "manual"),
+      "--permission-mode", permissionMode(mode),
       "--effort", normalizeEffort(req.identity.effort),
     ];
     if (selected) args.push("--model", selected);
     if (this.mcpConfigPath && existsSync(this.mcpConfigPath)) args.push("--mcp-config", this.mcpConfigPath);
-    if (/aster_(?:list_models|delegate_start|delegate_get)/i.test(req.prompt)) {
+    if (delegation) {
       const tools = ["mcp__law-ollama__aster_list_models", "mcp__law-ollama__aster_delegate_start", "mcp__law-ollama__aster_delegate_get"];
       if (req.identity.mode === "auto" || req.identity.mode === "full-access") tools.push("mcp__law-ollama__aster_delegate_start_mutating");
       args.push("--allowedTools", tools.join(","));
     }
-    if (this.sessions.has(req.taskId)) args.push("--resume", sessionId);
+    if (this.sessions.get(req.taskId) === binding) args.push("--resume", sessionId);
     else args.push("--session-id", sessionId);
     if (req.identity.mode === "full-access") args.push("--dangerously-skip-permissions");
 
@@ -66,7 +69,7 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
         let event: Record<string, any>;
         try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
 
-        if (event.type === "system" && event.subtype === "init") this.sessions.add(req.taskId);
+        if (event.type === "system" && event.subtype === "init") this.sessions.set(req.taskId, binding);
         if (event.type === "assistant") {
           for (const block of contentBlocks(event.message?.content)) {
             if (block.type === "text") assistant += String(block.text ?? "");
@@ -110,9 +113,9 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
   }
 }
 
-function permissionMode(mode: string): "plan" | "manual" | "acceptEdits" | "bypassPermissions" {
+function permissionMode(mode: string): "plan" | "manual" | "auto" | "bypassPermissions" {
   if (mode === "plan") return "plan";
-  if (mode === "auto") return "acceptEdits";
+  if (mode === "auto") return "auto";
   if (mode === "full-access") return "bypassPermissions";
   return "manual";
 }

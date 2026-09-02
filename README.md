@@ -73,7 +73,10 @@ one list, regardless of provider.
 
 1. Open the model selector.
 2. Search for or choose a model such as `Qwen:latest`.
-3. Select an effort level supported by that model.
+3. Select an effort level supported by that model. The visual effort control is
+   shown for providers that expose reasoning effort; Ollama and Gemini manage
+   their execution through their own model/runtime controls, so Aster keeps the
+   slider out of the way for those providers.
 4. Select the execution mode beside the model.
 5. Enter the task in chat and send it.
 
@@ -115,7 +118,9 @@ Every response carries a compact provider/model badge. Tool calls, commands,
 results, and permission denials are grouped into collapsed **Tools** disclosures.
 Press **↑** in the composer to recall earlier prompts. Hover a prior user
 message and choose **Rewind** to create a safe branch before that message; the
-original chat remains intact and the old prompt becomes editable.
+original chat remains intact and the old prompt becomes editable. The composer
+grows with longer prompts (up to a bounded portion of the window) and returns
+to its compact height after sending.
 
 Only configured, available providers can run. Prompt text cannot grant extra
 filesystem, command, network, or credential permissions.

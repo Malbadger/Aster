@@ -1,20 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import axe from "axe-core";
 import { App } from "./App.js";
-import { DESKTOP_VERSION } from "@law/contracts";
+import { DESKTOP_VERSION, type ModelDescriptor } from "@law/contracts";
 import type { IpcClient } from "./ipc/client.js";
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
-function client(): IpcClient {
+const ollamaModel: ModelDescriptor = { id: "ollama:qwen", displayName: "Qwen:latest", provider: "ollama", locality: "local", availability: "available", effort: { supported: ["low", "medium", "high"] }, capabilities: { tools: true, vision: false } };
+const remoteModel: ModelDescriptor = { id: "openai-codex:gpt-test", displayName: "GPT Test", provider: "openai-codex", locality: "remote", availability: "available", effort: { supported: ["low", "medium", "high", "max"] }, capabilities: { tools: true, vision: false } };
+
+function client(models: ModelDescriptor[] = [ollamaModel]): IpcClient {
   return {
     call: async (op) => {
       switch (op.name) {
         case "daemon_get_health": return { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true };
         case "daemon_probe_capabilities": return { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "Aster Core", state: "ready", optional: false, detail: "Ready" }] };
-        case "model_list_catalog": return { models: [{ id: "ollama:qwen", displayName: "Qwen:latest", provider: "ollama", locality: "local", availability: "available", effort: { supported: ["low", "medium", "high"] }, capabilities: { tools: true, vision: false } }], favorites: [], recent: [] };
+        case "model_list_catalog": return { models, favorites: [], recent: [] };
         case "task_list": return { tasks: [] };
         case "provider_list_connections": return { connections: [] };
         case "provider_auth_methods": return { providers: [] };
@@ -34,6 +37,28 @@ describe("App", () => {
     const result = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(result.violations).toEqual([]);
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus());
+    expect(screen.queryByRole("group", { name: "Reasoning effort" })).toBeNull();
+  });
+
+  it("shows effort for supported remote models and sends the selected Auto mode", async () => {
+    const sent: unknown[] = [];
+    const base = client([remoteModel]);
+    const modeClient = {
+      call: async (op: { name: string }, payload: unknown) => {
+        if (op.name === "task_create") return { task: { taskId: "task-1", title: "New chat", status: "active", createdAt: "", updatedAt: "" } };
+        if (op.name === "task_send_message") { sent.push(payload); return { accepted: true, interpretation: { type: "natural" }, status: "completed", nextSeq: 0 }; }
+        if (op.name === "task_get_events") return { events: [], nextSeq: 0, taskStatus: "completed" };
+        return base.call(op as never, payload as never);
+      },
+    } as IpcClient;
+    render(<App client={modeClient} />);
+    const box = await screen.findByRole("textbox", { name: "Message" });
+    expect(screen.getByRole("group", { name: "Reasoning effort" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Execution mode" }), { target: { value: "auto" } });
+    fireEvent.change(box, { target: { value: "implement this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toEqual(expect.objectContaining({ identity: expect.objectContaining({ mode: "auto", model: remoteModel.id }) }));
   });
 
   it("keeps the default native client stable across boot state updates", async () => {

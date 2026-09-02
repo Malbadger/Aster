@@ -21,13 +21,17 @@ describe("ChatPanel", () => {
     expect(screen.queryByText("duplicate denial result")).toBeNull();
   });
 
-  it("sends a message and clears the composer", () => {
+  it("grows for a long prompt, then sends and returns to its compact height", async () => {
     const onSend = vi.fn();
     render(<ChatPanel events={[]} running={false} onSend={onSend} onStop={() => {}} />);
-    const box = screen.getByLabelText("Message");
-    fireEvent.change(box, { target: { value: "do it" } });
+    const box = screen.getByLabelText("Message") as HTMLTextAreaElement;
+    Object.defineProperty(box, "scrollHeight", { configurable: true, get: () => box.value ? 190 : 42 });
+    fireEvent.change(box, { target: { value: "do it\nwith a much longer prompt" } });
+    await waitFor(() => expect(box.style.height).toBe("190px"));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(onSend).toHaveBeenCalledWith("do it");
+    expect(onSend).toHaveBeenCalledWith("do it\nwith a much longer prompt");
+    await waitFor(() => expect(box).toHaveValue(""));
+    await waitFor(() => expect(box.style.height).toBe("42px"));
   });
 
   it("shows Stop instead of Send while running", () => {

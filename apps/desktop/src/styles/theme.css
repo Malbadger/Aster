@@ -205,7 +205,7 @@ button:disabled { cursor: not-allowed; }
 .composer-wrap { padding: 10px clamp(12px, 3vw, 34px) 14px; display: flex; flex-direction: column; gap: 7px; }
 .composer-row { display: flex; align-items: flex-start; gap: 7px; padding: 8px; border: 1px solid var(--law-color-border-strong); border-radius: 5px; background: var(--law-color-bg-input); box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 2px 0 var(--law-color-accent); }
 .composer-prompt { flex: 0 0 19px; padding-top: 8px; color: var(--law-color-accent-strong); font: 700 18px/1 "IBM Plex Mono", "DejaVu Sans Mono", monospace; text-align: center; }
-.composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 42px; padding: 7px 6px; border: 0 !important; outline: 0; resize: none !important; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 13px/1.55 "IBM Plex Mono", "DejaVu Sans Mono", monospace; }
+.composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 42px; max-height: min(320px, 36vh); padding: 7px 6px; border: 0 !important; outline: 0; resize: none !important; overflow-y: hidden; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 13px/1.55 "IBM Plex Mono", "DejaVu Sans Mono", monospace; transition: height .12s ease; }
 .composer-row textarea.chat-composer-input::placeholder { color: var(--law-color-text-faint); -webkit-text-fill-color: var(--law-color-text-faint); opacity: 1; }
 .composer-row textarea.chat-composer-input::selection { color: var(--law-color-text); background: color-mix(in srgb, var(--law-color-accent) 42%, transparent); }
 .attach-button { flex: 0 0 30px; width: 30px; height: 30px; margin-top: 3px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--law-color-text-muted); cursor: pointer; }
@@ -243,7 +243,7 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
 .primary, .empty-panel button, .error-banner button { min-height: 32px; padding: 5px 11px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
 .primary { border-color: var(--law-color-accent); background: var(--law-color-accent); color: var(--law-color-on-accent); }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--law-color-danger); color: var(--law-color-danger); background: color-mix(in srgb, var(--law-color-danger) 7%, var(--law-color-bg-panel)); }
-.composer-controls { display: flex; align-items: center; gap: 8px; width: 100%; }
+.composer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; }
 .mode-control { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 8px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); color: var(--law-color-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
 .mode-control select { border: 0; outline: 0; background: transparent; color: var(--law-color-text); font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
 .mode-full-access { border-color: var(--law-color-danger); }
@@ -255,6 +255,7 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
 .model-trigger small { color: var(--law-color-text-faint); font-size: 10px; }
 .model-popover { position: absolute; z-index: 20; left: 0; bottom: calc(100% + 8px); padding: 8px; border: 1px solid var(--law-color-border-strong); border-radius: 8px; background: var(--law-color-bg-panel); box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
 .effort-label, .empty-kicker { color: var(--law-color-text-faint); font-family: "IBM Plex Mono", "DejaVu Sans Mono", monospace; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
+.effort-control-group { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 7px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); }
 .effort-slider { position: relative; min-width: 188px; display: grid; grid-template-columns: repeat(5,1fr); align-items: start; padding-top: 1px; }
 .effort-track { position: absolute; top: 8px; left: 10%; right: 10%; height: 1px; background: var(--law-color-border-strong); }
 .effort-slider button { position: relative; z-index: 1; min-width: 32px; height: 31px; display: grid; justify-items: center; align-content: start; gap: 4px; padding: 3px 2px 0; border: 0; background: transparent; color: var(--law-color-text-faint); }

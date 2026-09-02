@@ -54,6 +54,7 @@ function eventIdentity(event: ChatEvent, phases: Map<string, { provider: string;
 
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
+  const composerRef = React.useRef<HTMLTextAreaElement>(null);
   const [historyIndex, setHistoryIndex] = React.useState<number | undefined>();
   const draftBeforeHistory = React.useRef("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -77,6 +78,15 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const blocks = conversationBlocks(visibleEvents);
   const promptHistory = visibleEvents.filter((event) => event.kind === "user" && event.text?.trim()).map((event) => event.text!.trim());
   const resolvedApprovals = new Set(props.events.filter((event) => event.kind === "status" && typeof event.data?.approvalId === "string").map((event) => String(event.data?.approvalId)));
+  React.useLayoutEffect(() => {
+    const composer = composerRef.current;
+    if (!composer) return;
+    composer.style.height = "auto";
+    const maximum = Math.min(320, Math.max(160, Math.floor(window.innerHeight * 0.36)));
+    const height = Math.min(maximum, Math.max(42, composer.scrollHeight));
+    composer.style.height = `${height}px`;
+    composer.style.overflowY = composer.scrollHeight > maximum ? "auto" : "hidden";
+  }, [text]);
   const submit = async () => {
     const t = text.trim() || ((props.attachments?.length ?? 0) > 0 ? "Review the attached files." : "");
     if (!t || props.running || submitting) return;
@@ -134,6 +144,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
           </button>
           <span className="composer-prompt" aria-hidden>›</span>
           <textarea
+            ref={composerRef}
             aria-label="Message"
             autoFocus
             value={text}

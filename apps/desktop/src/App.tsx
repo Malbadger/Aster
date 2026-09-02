@@ -25,6 +25,7 @@ import { VscodiumEditor } from "./components/VscodiumEditor.js";
 import { SettingsPanel, type EditorEngine, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
 import type { AddConnectionForm } from "./components/ProviderConnections.js";
 import { FlatModelSelector } from "./components/FlatModelSelector.js";
+import { EffortControl } from "./components/EffortControl.js";
 import { FirstRunSetup } from "./components/FirstRunSetup.js";
 import { StartSurface, type StartAction } from "./components/StartSurface.js";
 import { TaskHistory } from "./components/TaskHistory.js";
@@ -54,6 +55,16 @@ function loadLayout(): Layout {
 
 function identityFor(model: ModelDescriptor | undefined, effort: EffortLevel, mode: ExecutionMode): PhaseIdentity | undefined {
   return model ? { provider: model.provider, model: model.id, effort, mode, locality: model.locality } : undefined;
+}
+
+function showsEffortControl(model: ModelDescriptor | undefined): model is ModelDescriptor {
+  return Boolean(model && !/(ollama|gemini|antigravity)/i.test(`${model.provider}:${model.id}`));
+}
+
+function supportedEffort(model: ModelDescriptor, current: EffortLevel): EffortLevel {
+  if (model.effort.supported.includes(current)) return current;
+  if (model.effort.supported.includes("medium")) return "medium";
+  return model.effort.supported[0] ?? "medium";
 }
 
 export function App({ client = defaultClient }: AppProps): React.JSX.Element {
@@ -536,9 +547,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       </button>
       {modelOpen && <div className="model-popover"><FlatModelSelector models={models} selectedId={selectedId} favorites={favorites} query={query}
         onQueryChange={(value) => { setQuery(value); void refreshCatalog(value); }}
-        onSelect={(id) => { setSelectedId(id); setModelOpen(false); }}
+        onSelect={(id) => {
+          const next = models.find((model) => model.id === id);
+          setSelectedId(id);
+          if (next) setEffort((current) => supportedEffort(next, current));
+          setModelOpen(false);
+        }}
         onToggleFavorite={(modelId, favorite) => void client.call(model_set_favorite, { modelId, favorite }).then((result) => setFavorites(result.favorites))} /></div>}
     </div>
+    {showsEffortControl(selected) && <div className="effort-control-group"><span className="effort-label">Effort</span><EffortControl value={effort} supported={selected.effort.supported} onChange={setEffort} /></div>}
     <label className={`mode-control mode-${mode}`} title="Execution permission mode">
       <span>Mode</span>
       <select aria-label="Execution mode" value={mode} onChange={(event) => {
