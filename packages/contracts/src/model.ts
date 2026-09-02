@@ -48,6 +48,8 @@ export const ModelCatalog = z.object({
   models: z.array(ModelDescriptor),
   favorites: z.array(z.string()),
   recent: z.array(z.string()),
+  /** Exact model id selected as the deterministic default for each provider. */
+  defaults: z.record(z.string(), z.string()),
 });
 export type ModelCatalog = z.infer<typeof ModelCatalog>;
 
@@ -69,6 +71,30 @@ export const model_set_favorite = defineOperation({
   consequential: false,
   request: z.object({ modelId: z.string().min(1), favorite: z.boolean() }),
   response: z.object({ favorites: z.array(z.string()) }),
+});
+
+export const model_set_provider_default = defineOperation({
+  name: "model_set_provider_default",
+  schemaVersion: 1,
+  summary: "Set or clear the exact default model for a provider.",
+  consequential: false,
+  request: z.object({ provider: z.string().min(1), modelId: z.string().min(1).optional() }),
+  response: z.object({ defaults: z.record(z.string(), z.string()) }),
+});
+
+export const ModelTargetResolution = z.object({
+  model: ModelDescriptor,
+  source: z.enum(["explicit", "provider-default"]),
+});
+export type ModelTargetResolution = z.infer<typeof ModelTargetResolution>;
+
+export const model_resolve_target = defineOperation({
+  name: "model_resolve_target",
+  schemaVersion: 1,
+  summary: "Resolve an explicit model or a provider default without substitution.",
+  consequential: false,
+  request: z.object({ provider: z.string().min(1).optional(), modelId: z.string().min(1).optional() }),
+  response: ModelTargetResolution,
 });
 
 export const EffortResolution = z.object({

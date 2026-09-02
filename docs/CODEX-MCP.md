@@ -1,10 +1,15 @@
-# Codex Desktop + local Ollama
+# Codex Desktop + Aster models
 
-Aster exposes a local MCP server that lets Codex delegate bounded read-only work to Pi and
-Ollama. The server uses MCP over `stdio`: Codex starts it as a child process, and it opens
-no network listener. Ollama traffic is restricted to `http://127.0.0.1:11434`.
+Aster exposes a local MCP server that lets Codex delegate bounded work to models connected
+through Aster. The server uses MCP over `stdio`: Codex starts it as a child process, and it
+opens no network listener. Ollama traffic is restricted to `http://127.0.0.1:11434`.
 
 ## Tools
+
+- `aster_list_models` — list available models and each provider's configured default.
+- `aster_delegate_start` — start a read-only task using an exact model or provider default.
+- `aster_delegate_start_mutating` — start an Auto-mode workspace task when explicitly authorized.
+- `aster_delegate_get` — poll a task for exact attribution, usage, response, or error.
 
 - `law_ollama_list_models` — list models installed in local Ollama.
 - `law_ollama_select_model` — choose the default model for new runs.
@@ -14,9 +19,10 @@ no network listener. Ollama traffic is restricted to `http://127.0.0.1:11434`.
 - `law_ollama_get_run` — read a compact checkpoint result without loading its transcript.
 - `law_ollama_export_evidence` — write a redacted evidence bundle locally.
 
-The model is locked when each run starts. Changing the selection affects only later runs.
-MCP delegation is read-only in this release. Mutating work remains available through the
-attended `law run --mutate` workflow, where the existing Aster policy gates remain visible.
+The model is locked when each run starts. Changing a default affects only later runs. An
+exact model always takes precedence over a provider default; missing and unavailable targets
+fail without substitution. Mutating delegation is exposed separately and remains subject to
+Aster's selected execution mode and policy gates.
 
 ## Codex configuration
 

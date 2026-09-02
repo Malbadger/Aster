@@ -23,7 +23,7 @@ export * from "./mcp.js";
 
 import { ContractRegistry } from "./ipc.js";
 import { daemon_get_health, daemon_probe_capabilities } from "./health.js";
-import { model_list_catalog, model_set_favorite, model_resolve_effort } from "./model.js";
+import { model_list_catalog, model_set_favorite, model_set_provider_default, model_resolve_target, model_resolve_effort } from "./model.js";
 import {
   provider_list_connections,
   provider_add_connection,
@@ -70,6 +70,8 @@ export function createContractRegistry(): ContractRegistry {
   r.register(daemon_probe_capabilities);
   r.register(model_list_catalog);
   r.register(model_set_favorite);
+  r.register(model_set_provider_default);
+  r.register(model_resolve_target);
   r.register(model_resolve_effort);
   r.register(provider_list_connections);
   r.register(provider_add_connection);

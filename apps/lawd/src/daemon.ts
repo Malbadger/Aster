@@ -12,6 +12,8 @@ import {
   daemon_probe_capabilities,
   model_list_catalog,
   model_set_favorite,
+  model_set_provider_default,
+  model_resolve_target,
   model_resolve_effort,
   provider_list_connections,
   provider_add_connection,
@@ -188,6 +190,14 @@ export class Daemon {
     this.dispatcher.handle(model_set_favorite.name, (payload) => {
       const { modelId, favorite } = payload as { modelId: string; favorite: boolean };
       return this.catalog.setFavorite(modelId, favorite);
+    });
+    this.dispatcher.handle(model_set_provider_default.name, async (payload) => {
+      const { provider, modelId } = payload as { provider: string; modelId?: string };
+      return this.catalog.setProviderDefault(provider, modelId);
+    });
+    this.dispatcher.handle(model_resolve_target.name, async (payload) => {
+      const { provider, modelId } = payload as { provider?: string; modelId?: string };
+      return this.catalog.resolveTarget({ provider, modelId });
     });
     this.dispatcher.handle(model_resolve_effort.name, async (payload) => {
       const { modelId, effort } = payload as { modelId: string; effort: EffortLevel };

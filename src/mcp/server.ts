@@ -39,19 +39,18 @@ function errorResult(error: unknown) {
   };
 }
 
-async function startDelegation(input: { model: string; prompt: string; workspace: string; effort: 'minimal' | 'low' | 'medium' | 'high' | 'max'; mode: 'plan' | 'auto'; caller_model?: string; response_format: 'markdown' | 'json' }) {
-  const { model, prompt, workspace, effort, mode, caller_model, response_format } = input;
-  if (caller_model && caller_model === model) throw new Error('Refused recursive delegation to the calling model. Choose a different model.');
-  const catalog = await callAsterDaemon<{ models: Array<{ id: string; displayName: string; provider: string; locality: 'local' | 'remote' | 'unknown'; availability: string; effort: { supported: string[] } }> }>('model_list_catalog', { query: model });
-  const target = catalog.models.find((item) => item.id === model);
-  if (!target) throw new Error(`Model "${model}" was not found. Call aster_list_models and use an exact ID.`);
-  if (target.availability !== 'available') throw new Error(`Model "${model}" is ${target.availability}. Connect or sign in through Aster first.`);
-  if (!target.effort.supported.includes(effort)) throw new Error(`Model "${model}" does not support effort "${effort}". Supported: ${target.effort.supported.join(', ')}.`);
+async function startDelegation(input: { model?: string; provider?: string; prompt: string; workspace: string; effort: 'minimal' | 'low' | 'medium' | 'high' | 'max'; mode: 'plan' | 'auto'; caller_model?: string; response_format: 'markdown' | 'json' }) {
+  const { model, provider, prompt, workspace, effort, mode, caller_model, response_format } = input;
+  if (!model && !provider) throw new Error('Provide an exact model ID or a provider with a configured default.');
+  const resolved = await callAsterDaemon<{ model: { id: string; displayName: string; provider: string; locality: 'local' | 'remote' | 'unknown'; availability: string; effort: { supported: string[] } }; source: 'explicit' | 'provider-default' }>('model_resolve_target', { ...(model ? { modelId: model } : {}), ...(provider ? { provider } : {}) });
+  const target = resolved.model;
+  if (caller_model && caller_model === target.id) throw new Error('Refused recursive delegation to the calling model. Choose a different model.');
+  if (!target.effort.supported.includes(effort)) throw new Error(`Model "${target.id}" does not support effort "${effort}". Supported: ${target.effort.supported.join(', ')}.`);
   const identity = { provider: target.provider, model: target.id, effort, mode, locality: target.locality };
   const created = await callAsterDaemon<{ task: { taskId: string } }>('task_create', { title: `Delegated · ${target.displayName}`, workspaceId: workspace, defaultIdentity: identity });
   const sent = await callAsterDaemon<{ status: string }>('task_send_message', { taskId: created.task.taskId, text: prompt, identity, attachmentIds: [], attachmentEgressApproved: false });
-  const output = { task_id: created.task.taskId, model: target.id, provider: target.provider, mode, status: sent.status };
-  return textResult(output, response_format, `Started ${mode === 'plan' ? 'read-only ' : ''}Aster delegation **${created.task.taskId}** with **${target.id}**. Poll \`aster_delegate_get\` until it settles.`);
+  const output = { task_id: created.task.taskId, model: target.id, provider: target.provider, resolution: resolved.source, mode, status: sent.status };
+  return textResult(output, response_format, `Started ${mode === 'plan' ? 'read-only ' : ''}Aster delegation **${created.task.taskId}** with **${target.id}** (${resolved.source}). Poll \`aster_delegate_get\` until it settles.`);
 }
 
 export function createLawMcpServer(): McpServer {
@@ -67,11 +66,11 @@ export function createLawMcpServer(): McpServer {
     },
     async ({ query, response_format }) => {
       try {
-        const catalog = await callAsterDaemon<{ models: Array<{ id: string; displayName: string; provider: string; locality: string; availability: string }> }>('model_list_catalog', { query });
+        const catalog = await callAsterDaemon<{ models: Array<{ id: string; displayName: string; provider: string; locality: string; availability: string }>; defaults: Record<string, string> }>('model_list_catalog', { query });
         const available = catalog.models.filter((model) => model.availability === 'available');
         return textResult(
-          { count: available.length, models: available }, response_format,
-          ['# Aster models', '', ...available.map((model) => `- **${model.id}** — ${model.displayName} (${model.provider}, ${model.locality})`)].join('\n'),
+          { count: available.length, defaults: catalog.defaults, models: available }, response_format,
+          ['# Aster models', '', ...available.map((model) => `- **${model.id}** — ${model.displayName} (${model.provider}, ${model.locality})${catalog.defaults[model.provider] === model.id ? ' · default' : ''}`)].join('\n'),
         );
       } catch (error) { return errorResult(error); }
     },
@@ -81,9 +80,10 @@ export function createLawMcpServer(): McpServer {
     'aster_delegate_start',
     {
       title: 'Delegate to an Aster Model',
-      description: 'Starts a bounded read-only Aster task with an exact model ID. Safe in Plan mode. This is the supported way for one model to ask another to inspect, review, audit, or research; never use vendor SDKs, shell CLIs, credentials, or ad-hoc Python clients.',
+      description: 'Starts a bounded read-only Aster task using an exact model ID or a configured provider default. Safe in Plan mode. Never substitutes another model.',
       inputSchema: {
-        model: z.string().min(1).max(300).describe('Exact provider-qualified ID from aster_list_models.'),
+        model: z.string().min(1).max(300).optional().describe('Exact provider-qualified ID from aster_list_models. Takes precedence over provider default.'),
+        provider: z.string().min(1).max(200).optional().describe('Provider whose configured default should be used when model is omitted.'),
         prompt: z.string().min(1).max(30_000).describe('Self-contained task and expected return format.'),
         workspace: z.string().min(1).max(4_096).describe('Absolute workspace associated with the task.'),
         effort: z.enum(['minimal', 'low', 'medium', 'high', 'max']).default('medium'),
@@ -93,8 +93,8 @@ export function createLawMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ model, prompt, workspace, effort, mode, caller_model, response_format }) => {
-      try { return await startDelegation({ model, prompt, workspace, effort, mode, ...(caller_model ? { caller_model } : {}), response_format }); }
+    async ({ model, provider, prompt, workspace, effort, mode, caller_model, response_format }) => {
+      try { return await startDelegation({ ...(model ? { model } : {}), ...(provider ? { provider } : {}), prompt, workspace, effort, mode, ...(caller_model ? { caller_model } : {}), response_format }); }
       catch (error) { return errorResult(error); }
     },
   );
@@ -105,14 +105,14 @@ export function createLawMcpServer(): McpServer {
       title: 'Delegate Workspace Changes to an Aster Model',
       description: 'Starts a bounded Auto-mode Aster task that may modify the selected workspace. Use only when the user explicitly requested changes and the coordinating Aster phase is Auto or Full access.',
       inputSchema: {
-        model: z.string().min(1).max(300), prompt: z.string().min(1).max(30_000), workspace: z.string().min(1).max(4_096),
+        model: z.string().min(1).max(300).optional(), provider: z.string().min(1).max(200).optional(), prompt: z.string().min(1).max(30_000), workspace: z.string().min(1).max(4_096),
         effort: z.enum(['minimal', 'low', 'medium', 'high', 'max']).default('medium'),
         caller_model: z.string().max(300).optional(), response_format: formatSchema,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ model, prompt, workspace, effort, caller_model, response_format }) => {
-      try { return await startDelegation({ model, prompt, workspace, effort, mode: 'auto', ...(caller_model ? { caller_model } : {}), response_format }); }
+    async ({ model, provider, prompt, workspace, effort, caller_model, response_format }) => {
+      try { return await startDelegation({ ...(model ? { model } : {}), ...(provider ? { provider } : {}), prompt, workspace, effort, mode: 'auto', ...(caller_model ? { caller_model } : {}), response_format }); }
       catch (error) { return errorResult(error); }
     },
   );
@@ -128,12 +128,20 @@ export function createLawMcpServer(): McpServer {
     async ({ task_id, response_format }) => {
       try {
         const result = await callAsterDaemon<{ events: Array<{ kind: string; text?: string; data?: Record<string, unknown> }>; taskStatus: string }>('task_get_events', { taskId: task_id, sinceSeq: 0 });
-        const assistant = result.events.filter((event) => event.kind === 'assistant').at(-1);
+        const assistant = result.events.filter((event) => event.kind === 'assistant' && event.text?.trim()).at(-1);
         const error = result.events.filter((event) => event.kind === 'error').at(-1);
-        const identity = assistant?.data?.identity as { provider?: string; model?: string } | undefined;
-        const output = { task_id, status: result.taskStatus, provider: identity?.provider, model: identity?.model, response: assistant?.text, error: error?.text };
-        const detail = error?.text ?? assistant?.text ?? 'The delegated model is still working.';
-        return textResult(output, response_format, `# Delegation ${task_id}\n\n- Status: ${result.taskStatus}\n- Provider: ${identity?.provider ?? 'pending'}\n- Model: ${identity?.model ?? 'pending'}\n\n${detail}`);
+        const identityEvent = [...result.events].reverse().find((event) => event.data?.identity);
+        const identity = identityEvent?.data?.identity as { provider?: string; model?: string } | undefined;
+        const usage = result.events.reduce((total, event) => {
+          const item = event.data?.usage as { input?: number; output?: number } | undefined;
+          return { input: total.input + (item?.input ?? 0), output: total.output + (item?.output ?? 0) };
+        }, { input: 0, output: 0 });
+        const emptyCompletion = result.taskStatus === 'completed' && !assistant && !error;
+        const effectiveError = error?.text ?? (emptyCompletion ? 'Delegated model completed without returning a response.' : undefined);
+        const status = emptyCompletion ? 'error' : result.taskStatus;
+        const output = { task_id, status, provider: identity?.provider, model: identity?.model, response: assistant?.text, error: effectiveError, usage };
+        const detail = effectiveError ?? assistant?.text ?? 'The delegated model is still working.';
+        return textResult(output, response_format, `# Delegation ${task_id}\n\n- Status: ${status}\n- Provider: ${identity?.provider ?? 'pending'}\n- Model: ${identity?.model ?? 'pending'}\n- Usage: ${usage.input} input · ${usage.output} output\n\n${detail}`);
       } catch (error) { return errorResult(error); }
     },
   );

@@ -49,4 +49,30 @@ describe("CatalogService", () => {
     expect(r.supported).toBe(false);
     expect(r.reason).toMatch(/not in the current catalog/);
   });
+
+  it("resolves a configured provider default without guessing", async () => {
+    const svc = new CatalogService(source, new MemoryPreferencesStore({ providerDefaults: { ollama: "ollama:zephyr" } }));
+    const resolved = await svc.resolveTarget({ provider: "ollama" });
+    expect(resolved).toMatchObject({ source: "provider-default", model: { id: "ollama:zephyr" } });
+  });
+
+  it("uses an explicit model before a provider default", async () => {
+    const svc = new CatalogService(source, new MemoryPreferencesStore({ providerDefaults: { ollama: "ollama:zephyr" } }));
+    const resolved = await svc.resolveTarget({ provider: "ollama", modelId: "ollama:alpaca" });
+    expect(resolved).toMatchObject({ source: "explicit", model: { id: "ollama:alpaca" } });
+  });
+
+  it("refuses missing, mismatched, and unavailable defaults without substitution", async () => {
+    const svc = new CatalogService(source, new MemoryPreferencesStore());
+    await expect(svc.resolveTarget({ provider: "ollama" })).rejects.toThrow(/no default model/);
+    await expect(svc.resolveTarget({ provider: "ollama", modelId: "acme:pro" })).rejects.toThrow(/belongs to provider/);
+    await expect(svc.setProviderDefault("acme", "acme:pro")).rejects.toThrow(/not currently available/);
+  });
+
+  it("stores and clears a validated provider default", async () => {
+    const svc = new CatalogService(source, new MemoryPreferencesStore());
+    expect((await svc.setProviderDefault("ollama", "ollama:zephyr")).defaults).toEqual({ ollama: "ollama:zephyr" });
+    expect((await svc.listCatalog("")).defaults).toEqual({ ollama: "ollama:zephyr" });
+    expect((await svc.setProviderDefault("ollama")).defaults).toEqual({});
+  });
 });

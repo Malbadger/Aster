@@ -40,4 +40,13 @@ describe("FlatModelSelector", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Search models" }), { target: { value: "pro" } });
     expect(onQuery).toHaveBeenCalledWith("pro");
   });
+
+  it("marks and changes provider defaults without selecting the row", () => {
+    const onSelect = vi.fn();
+    const onDefault = vi.fn();
+    render(<FlatModelSelector models={models} favorites={[]} providerDefaults={{}} query="" onQueryChange={() => {}} onSelect={onSelect} onToggleFavorite={() => {}} onSetProviderDefault={onDefault} />);
+    fireEvent.click(screen.getByRole("button", { name: "Set llama3 as ollama default" }));
+    expect(onDefault).toHaveBeenCalledWith("ollama", "ollama:llama3");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });

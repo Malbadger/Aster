@@ -44,6 +44,16 @@ function make(runner: PhaseRunner) {
 }
 
 describe("Orchestrator", () => {
+  it("treats a settled phase with no assistant response as an error", async () => {
+    const runner: PhaseRunner = { async *run() { yield { kind: "settled" }; } };
+    const { orch } = make(runner);
+    const { task } = orch.createTask({ title: "empty", defaultIdentity: IDENTITY });
+    orch.sendMessage({ taskId: task.taskId, text: "respond" });
+    await orch.idle(task.taskId);
+    const result = orch.getEvents(task.taskId, 0);
+    expect(result.taskStatus).toBe("error");
+    expect(result.events.some((event) => event.kind === "error" && event.text?.includes("without returning a response"))).toBe(true);
+  });
   it("runs a natural-language turn as a phase and streams chronological events", async () => {
     const { orch } = make(new ScriptedRunner());
     const { task } = orch.createTask({ title: "chat", defaultIdentity: IDENTITY });

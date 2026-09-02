@@ -17,7 +17,7 @@ function client(models: ModelDescriptor[] = [ollamaModel]): IpcClient {
       switch (op.name) {
         case "daemon_get_health": return { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true };
         case "daemon_probe_capabilities": return { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "Aster Core", state: "ready", optional: false, detail: "Ready" }] };
-        case "model_list_catalog": return { models, favorites: [], recent: [] };
+        case "model_list_catalog": return { models, favorites: [], recent: [], defaults: {} };
         case "task_list": return { tasks: [] };
         case "provider_list_connections": return { connections: [] };
         case "provider_auth_methods": return { providers: [] };
@@ -67,7 +67,7 @@ describe("App", () => {
       const results: Record<string, unknown> = {
         daemon_get_health: { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true },
         daemon_probe_capabilities: { probedAt: new Date(0).toISOString(), capabilities: [{ id: "core", displayName: "Aster Core", state: "ready", optional: false, detail: "Ready" }] },
-        model_list_catalog: { models: [], favorites: [], recent: [] },
+        model_list_catalog: { models: [], favorites: [], recent: [], defaults: {} },
         task_list: { tasks: [] },
         provider_list_connections: { connections: [] },
         provider_auth_methods: { providers: [] },

@@ -39,16 +39,16 @@ describe("ClaudeCodePhaseRunner", () => {
     `);
     chmodSync(executable, 0o755);
     const runner = new ClaudeCodePhaseRunner(executable);
-    expect(await collect(runner, request())).toEqual([
+    expect(await collect(runner, request("claude-task", "Review this workspace", "auto"))).toEqual([
       { kind: "tool_call", tool: "Read", input: { file_path: "README.md" }, callId: "tool-1" },
       { kind: "tool_result", tool: "claude-code-tool", ok: true, summary: "ok", callId: "tool-1" },
       { kind: "usage", input: 12, output: 3 },
       { kind: "assistant", text: "Reviewed." },
       { kind: "settled" },
     ]);
-    await collect(runner, request());
+    await collect(runner, request("claude-task", "Review this workspace", "auto"));
     const calls = readFileSync(argvLog, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[]);
-    expect(calls[0]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "plan", "--model", "claude-sonnet-4-6"]));
+    expect(calls[0]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "auto", "--model", "claude-sonnet-4-6"]));
     expect(calls[1]).toEqual(expect.arrayContaining(["--resume", expect.any(String)]));
   });
 
@@ -108,7 +108,9 @@ describe("ClaudeCodePhaseRunner", () => {
     await collect(runner, request("mode-change", "Review", "plan"));
     await collect(runner, request("mode-change", "Implement", "auto"));
     const calls = readFileSync(argvLog, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string[]);
-    expect(calls[0]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "plan"]));
+    expect(calls[0]).toEqual(expect.arrayContaining(["--permission-mode", "plan", "--no-session-persistence"]));
+    expect(calls[0]).not.toContain("--session-id");
+    expect(calls[0]).not.toContain("--resume");
     expect(calls[1]).toEqual(expect.arrayContaining(["--session-id", expect.any(String), "--permission-mode", "auto"]));
     expect(calls[1]).not.toContain("--resume");
   });

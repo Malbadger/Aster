@@ -1,5 +1,5 @@
 import React from "react";
-import type { McpServerConfig, McpServerView, ProviderConnection, UsageSummary } from "@law/contracts";
+import type { McpServerConfig, McpServerView, ModelDescriptor, ProviderConnection, UsageSummary } from "@law/contracts";
 import { ProviderConnections, type AddConnectionForm, type GeminiCliStatusView } from "./ProviderConnections.js";
 import type { AuthProvider } from "./AuthCard.js";
 import { McpHub } from "./McpHub.js";
@@ -8,7 +8,7 @@ export type LawTheme = "graphite" | "light" | "midnight" | "high-contrast"
   | "dracula" | "one-dark-pro" | "monokai" | "solarized-dark" | "solarized-light"
   | "nord" | "gruvbox-dark" | "github-dark" | "github-light" | "tokyo-night"
   | "night-owl" | "catppuccin-mocha" | "synthwave-84" | "atom-one-light";
-export type SettingsTab = "appearance" | "providers" | "mcp" | "usage" | "about";
+export type SettingsTab = "appearance" | "providers" | "models" | "mcp" | "usage" | "about";
 export type EditorEngine = "vscode-oss";
 
 export interface SettingsPanelProps {
@@ -20,6 +20,8 @@ export interface SettingsPanelProps {
   authProviders: AuthProvider[];
   geminiCli?: GeminiCliStatusView;
   usage?: UsageSummary;
+  models: ModelDescriptor[];
+  providerDefaults: Record<string, string>;
   mcpServers: McpServerView[];
   mcpConfigPath?: string;
   mcpBusyId?: string;
@@ -34,6 +36,7 @@ export interface SettingsPanelProps {
   onSetConnectionEnabled: (id: string, enabled: boolean) => void;
   onCheckConnection: (id: string) => void;
   onAuthenticate: (provider: string, method: "oauth" | "api_key") => void;
+  onSetProviderDefault: (provider: string, modelId?: string) => void;
   onGeminiCliLogin?: () => void;
   onClaudeCodeLogin?: () => void;
   onMcpUpsert: (server: McpServerConfig) => void;
@@ -70,7 +73,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
       <header><div><span className="empty-kicker">Aster</span><h1>Settings</h1></div><button type="button" aria-label="Close settings" onClick={props.onClose}>×</button></header>
       <div className="settings-body">
         <nav aria-label="Settings sections">
-          {(["appearance", "providers", "mcp", "usage", "about"] as SettingsTab[]).map((tab) => <button key={tab} type="button" className={props.tab === tab ? "active" : ""} onClick={() => props.onTab(tab)}>{tab === "mcp" ? "MCP Hub" : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
+          {(["appearance", "providers", "models", "mcp", "usage", "about"] as SettingsTab[]).map((tab) => <button key={tab} type="button" className={props.tab === tab ? "active" : ""} onClick={() => props.onTab(tab)}>{tab === "mcp" ? "MCP Hub" : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
         </nav>
         <main>
           {props.tab === "appearance" && <section><h2>Color theme</h2><p>Choose a workspace palette. Aster and its embedded VSCodium editor stay synchronized, and the selection is stored only on this device.</p><div className="theme-grid">
@@ -80,6 +83,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
           </div></section>}
           {props.tab === "providers" && <ProviderConnections connections={props.connections} state={props.providerState} errorMessage={props.providerError}
             authProviders={props.authProviders} geminiCli={props.geminiCli} onAdd={props.onAddConnection} onRemove={props.onRemoveConnection} onSetEnabled={props.onSetConnectionEnabled} onCheck={props.onCheckConnection} onAuthenticate={props.onAuthenticate} onGeminiCliLogin={props.onGeminiCliLogin} onClaudeCodeLogin={props.onClaudeCodeLogin} />}
+          {props.tab === "models" && <ProviderDefaults models={props.models} defaults={props.providerDefaults} onSet={props.onSetProviderDefault} />}
           {props.tab === "mcp" && <McpHub servers={props.mcpServers} configPath={props.mcpConfigPath} busyId={props.mcpBusyId} error={props.mcpError}
             onUpsert={props.onMcpUpsert} onImport={props.onMcpImport} onSetEnabled={props.onMcpSetEnabled} onTest={props.onMcpTest} onRemove={props.onMcpRemove} />}
           {props.tab === "usage" && <UsagePanel usage={props.usage} />}
@@ -88,6 +92,24 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
       </div>
     </section>
   </div>;
+}
+
+function ProviderDefaults({ models, defaults, onSet }: { models: ModelDescriptor[]; defaults: Record<string, string>; onSet: (provider: string, modelId?: string) => void }): React.JSX.Element {
+  const providers = [...new Set(models.map((model) => model.provider))].sort();
+  return <section className="provider-defaults"><h2>Default models</h2><p>Choose one exact default per provider. Orchestration uses it only when a provider is named without a model, and never substitutes another model.</p>
+    {!providers.length ? <div className="settings-empty"><strong>No models discovered</strong><span>Connect a provider or start a local endpoint first.</span></div> : providers.map((provider) => {
+      const candidates = models.filter((model) => model.provider === provider);
+      const selected = defaults[provider] ?? "";
+      const selectedModel = candidates.find((model) => model.id === selected);
+      return <label className="settings-row provider-default-row" key={provider}>
+        <div><strong>{providerName(provider)}</strong><p>{selectedModel ? `${selectedModel.displayName} · ${selectedModel.locality}` : "No default selected"}</p></div>
+        <select aria-label={`${providerName(provider)} default model`} value={selected} onChange={(event) => onSet(provider, event.target.value || undefined)}>
+          <option value="">No default</option>
+          {candidates.map((model) => <option key={model.id} value={model.id} disabled={model.availability !== "available"}>{model.displayName}{model.availability === "available" ? "" : ` (${model.availability})`}</option>)}
+        </select>
+      </label>;
+    })}
+  </section>;
 }
 
 function UsagePanel({ usage }: { usage?: UsageSummary }): React.JSX.Element {

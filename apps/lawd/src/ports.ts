@@ -50,4 +50,6 @@ export interface PreferencesStore {
   setFavorite(modelId: string, favorite: boolean): string[];
   getRecent(): string[];
   addRecent(modelId: string): void;
+  getProviderDefaults(): Record<string, string>;
+  setProviderDefault(provider: string, modelId?: string): Record<string, string>;
 }

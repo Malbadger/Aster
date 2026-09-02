@@ -15,6 +15,8 @@ export interface FlatModelSelectorProps {
   onQueryChange: (q: string) => void;
   onSelect: (id: string) => void;
   onToggleFavorite: (id: string, favorite: boolean) => void;
+  providerDefaults?: Record<string, string>;
+  onSetProviderDefault?: (provider: string, modelId: string) => void;
 }
 
 const availabilityLabel: Record<ModelDescriptor["availability"], string> = {
@@ -53,6 +55,7 @@ export function FlatModelSelector(props: FlatModelSelectorProps): React.JSX.Elem
           const selected = m.id === props.selectedId;
           const isFav = favSet.has(m.id);
           const disabled = m.availability === "unavailable";
+          const isDefault = props.providerDefaults?.[m.provider] === m.id;
           return (
             <li
               key={m.id}
@@ -105,6 +108,11 @@ export function FlatModelSelector(props: FlatModelSelectorProps): React.JSX.Elem
                   {m.secondaryLabel ? ` · ${m.secondaryLabel}` : ""}
                 </span>
               </span>
+              {props.onSetProviderDefault && <button type="button" className={isDefault ? "model-default active" : "model-default"}
+                aria-label={isDefault ? `${m.displayName} is the ${m.provider} default` : `Set ${m.displayName} as ${m.provider} default`}
+                disabled={disabled || isDefault} onClick={(event) => { event.stopPropagation(); props.onSetProviderDefault?.(m.provider, m.id); }}>
+                {isDefault ? "Default" : "Set default"}
+              </button>}
             </li>
           );
         })}

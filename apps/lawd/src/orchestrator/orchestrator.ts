@@ -288,6 +288,7 @@ export class Orchestrator {
 
     let lastError: string | undefined;
     let cancelled = false;
+    let assistantProduced = false;
     try {
       for await (const ev of this.deps.runner.run({
         taskId: task.taskId,
@@ -305,10 +306,15 @@ export class Orchestrator {
           break;
         }
         this.recordPhaseEvent(task.taskId, phase.phaseId, phase.identity, ev);
+        if (ev.kind === "assistant" && ev.text.trim().length > 0) assistantProduced = true;
         if (ev.kind === "error") lastError = ev.message;
       }
       // The runner may have returned in response to abort without yielding again.
       if (controller.signal.aborted) cancelled = true;
+      if (!cancelled && !lastError && !assistantProduced) {
+        lastError = "Model completed without returning a response.";
+        this.append(task.taskId, { kind: "error", taskId: task.taskId, phaseId: phase.phaseId, text: lastError });
+      }
     } catch (err) {
       lastError = err instanceof Error ? err.message : "phase runner failed";
       this.append(task.taskId, { kind: "error", taskId: task.taskId, phaseId: phase.phaseId, text: lastError });

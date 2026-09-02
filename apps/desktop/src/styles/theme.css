@@ -298,6 +298,10 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
 .editor-panel header code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--law-color-text); }
 .editor-panel header button, .editor-panel header select { min-height: 28px; border: 1px solid var(--law-color-border); border-radius: 4px; background: var(--law-color-bg-input); color: var(--law-color-text); }
 .settings-row select { min-height: 34px; padding: 5px 9px; border: 1px solid var(--law-color-border-strong); border-radius: 5px; background: var(--law-color-bg-input); color: var(--law-color-text); }
+.provider-default-row select { min-width: 260px; max-width: 46%; }
+.model-default { margin-left: auto; padding: 3px 7px; border: 1px solid var(--law-color-border); border-radius: 999px; background: transparent; color: var(--law-color-text-muted); font-size: 10px; white-space: nowrap; }
+.model-default:not(:disabled):hover { border-color: var(--law-color-accent); color: var(--law-color-text); }
+.model-default.active { border-color: var(--law-color-accent); color: var(--law-color-accent-strong); }
 .editor-panel textarea { flex: 1; min-height: 0; width: 100%; resize: none; padding: 14px 16px; border: 0; outline: 0; background: #151419; color: var(--law-color-text); font: 12px/1.65 "IBM Plex Mono", "DejaVu Sans Mono", monospace; tab-size: 2; }
 .editor-breadcrumbs { min-height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid var(--law-color-border); background: var(--law-editor-gutter); color: var(--law-color-text-muted); font-size: 11px; }
 .editor-breadcrumbs i { color: var(--law-color-text-faint); font-style: normal; }.editor-breadcrumbs span:last-of-type { color: var(--law-color-text); }

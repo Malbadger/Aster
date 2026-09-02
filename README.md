@@ -80,6 +80,13 @@ one list, regardless of provider.
 4. Select the execution mode beside the model.
 5. Enter the task in chat and send it.
 
+Open **Settings → Models** to choose one exact default model for each provider.
+When an orchestration prompt names a provider but omits its model, Aster uses
+that provider's configured default. An exact model in the prompt always wins.
+If the requested model/default is missing or unavailable, the phase fails
+clearly—Aster never silently substitutes a different model. You can also mark a
+provider default directly from the flat model selector.
+
 Provider, model, effort, and mode are locked when a phase starts. Changing any
 of them affects a later phase, not the active phase. The modes are:
 
@@ -109,6 +116,12 @@ through its local MCP server. A coordinating model lists Aster's available
 models, starts a bounded delegated task, and polls its result. It must not search
 for vendor SDKs, invent an `openai.py` client, read credentials, or silently
 substitute another model.
+
+When a role names only a provider, the coordinating model asks Aster to resolve
+that provider's configured default. Delegation results report the exact resolved
+provider/model, whether resolution was explicit or defaulted, and measured token
+usage. A delegated task that returns no assistant response is reported as an
+error rather than a false completion.
 
 Read-only delegation is available in Plan mode. Delegated workspace changes
 require the coordinating phase to be in Auto or Full access; Aster does not let

@@ -3,7 +3,7 @@ import { open as openNativePath, save as saveNativePath } from "@tauri-apps/plug
 import { invoke } from "@tauri-apps/api/core";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
-  model_list_catalog, model_set_favorite, task_cancel, task_create,
+  model_list_catalog, model_set_favorite, model_set_provider_default, task_cancel, task_create,
   task_get_events, task_list, task_send_message, task_delete, task_rewind, task_respond_approval,
   usage_get_summary,
   fs_list_directory, fs_read_file, fs_write_file, verify_run,
@@ -73,6 +73,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [probe, setProbe] = React.useState<CapabilityProbe>();
   const [models, setModels] = React.useState<ModelDescriptor[]>([]);
   const [favorites, setFavorites] = React.useState<string[]>([]);
+  const [providerDefaults, setProviderDefaults] = React.useState<Record<string, string>>({});
   const [query, setQuery] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string>();
   const [effort, setEffort] = React.useState<EffortLevel>("medium");
@@ -121,9 +122,18 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   const refreshCatalog = React.useCallback(async (search = "") => {
     const catalog = await client.call(model_list_catalog, { query: search });
-    setModels(catalog.models); setFavorites(catalog.favorites);
+    setModels(catalog.models); setFavorites(catalog.favorites); setProviderDefaults(catalog.defaults);
     setSelectedId((current) => current && catalog.models.some((model) => model.id === current)
       ? current : catalog.models.find((model) => model.availability === "available")?.id);
+  }, [client]);
+
+  const setProviderDefault = React.useCallback(async (provider: string, modelId?: string) => {
+    try {
+      const result = await client.call(model_set_provider_default, { provider, modelId });
+      setProviderDefaults(result.defaults);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
   }, [client]);
 
   const refreshTasks = React.useCallback(async () => {
@@ -215,6 +225,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     if (settingsTab !== "usage") return;
     void client.call(usage_get_summary, {}).then(setUsage).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, [client, settingsTab]);
+  React.useEffect(() => {
+    if (settingsTab !== "models") return;
+    setQuery("");
+    void refreshCatalog("").catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, [refreshCatalog, settingsTab]);
   React.useEffect(() => {
     if (settingsTab !== "mcp") return;
     void refreshMcp().catch((cause) => setMcpError(cause instanceof Error ? cause.message : String(cause)));
@@ -554,6 +569,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
           if (next) setEffort((current) => supportedEffort(next, current));
           setModelOpen(false);
         }}
+        providerDefaults={providerDefaults} onSetProviderDefault={(provider, modelId) => void setProviderDefault(provider, modelId)}
         onToggleFavorite={(modelId, favorite) => void client.call(model_set_favorite, { modelId, favorite }).then((result) => setFavorites(result.favorites))} /></div>}
     </div>
     {showsEffortControl(selected) && <label className="composer-select-control effort-select-control" title="Reasoning effort">
@@ -646,11 +662,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
       {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} onSettings={() => setSettingsTab("appearance")} /></main>}
     </div>
-    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli} usage={usage}
+    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli} usage={usage} models={models} providerDefaults={providerDefaults}
       mcpServers={mcpServers} mcpConfigPath={mcpConfigPath} mcpBusyId={mcpBusyId} mcpError={mcpError}
       onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
       onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} onClaudeCodeLogin={startClaudeCodeLogin}
+      onSetProviderDefault={(provider, modelId) => void setProviderDefault(provider, modelId)}
       onMcpUpsert={(server: McpServerConfig) => void updateMcp(() => client.call(mcp_server_upsert, server))}
       onMcpImport={(json) => void updateMcp(() => client.call(mcp_server_import, { json }))}
       onMcpSetEnabled={(id, enabled) => void updateMcp(() => client.call(mcp_server_set_enabled, { id, enabled }))}

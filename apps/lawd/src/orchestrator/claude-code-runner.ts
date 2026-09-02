@@ -35,6 +35,7 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
       "--permission-mode", permissionMode(mode),
       "--effort", normalizeEffort(req.identity.effort),
     ];
+    if (mode === "plan") args.push("--no-session-persistence");
     if (selected) args.push("--model", selected);
     if (this.mcpConfigPath && existsSync(this.mcpConfigPath)) args.push("--mcp-config", this.mcpConfigPath);
     if (delegation) {
@@ -42,8 +43,10 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
       if (req.identity.mode === "auto" || req.identity.mode === "full-access") tools.push("mcp__law-ollama__aster_delegate_start_mutating");
       args.push("--allowedTools", tools.join(","));
     }
-    if (this.sessions.get(req.taskId) === binding) args.push("--resume", sessionId);
-    else args.push("--session-id", sessionId);
+    if (mode !== "plan") {
+      if (this.sessions.get(req.taskId) === binding) args.push("--resume", sessionId);
+      else args.push("--session-id", sessionId);
+    }
     if (req.identity.mode === "full-access") args.push("--dangerously-skip-permissions");
 
     const child = spawn(this.executable, args, {
@@ -69,7 +72,7 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
         let event: Record<string, any>;
         try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
 
-        if (event.type === "system" && event.subtype === "init") this.sessions.set(req.taskId, binding);
+        if (event.type === "system" && event.subtype === "init" && mode !== "plan") this.sessions.set(req.taskId, binding);
         if (event.type === "assistant") {
           for (const block of contentBlocks(event.message?.content)) {
             if (block.type === "text") assistant += String(block.text ?? "");
