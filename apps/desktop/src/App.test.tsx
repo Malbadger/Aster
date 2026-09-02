@@ -22,6 +22,7 @@ function client(models: ModelDescriptor[] = [ollamaModel]): IpcClient {
         case "provider_list_connections": return { connections: [] };
         case "provider_auth_methods": return { providers: [] };
         case "provider_gemini_cli_status": return { installed: true, configured: false, version: "0.57.0" };
+        case "workspace_get_root": return { path: "/home/test" };
         default: throw new Error(`unexpected test operation ${op.name}`);
       }
     },
@@ -40,7 +41,7 @@ describe("App", () => {
     expect(screen.queryByRole("combobox", { name: "Reasoning effort" })).toBeNull();
   });
 
-  it("shows effort for supported remote models and sends the selected Auto mode", async () => {
+  it("shows effort for supported remote models and sends the selected Full Access mode", async () => {
     const sent: unknown[] = [];
     const base = client([remoteModel]);
     const modeClient = {
@@ -51,18 +52,21 @@ describe("App", () => {
         return base.call(op as never, payload as never);
       },
     } as IpcClient;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App client={modeClient} />);
     const box = await screen.findByRole("textbox", { name: "Message" });
     expect(screen.getByRole("combobox", { name: "Reasoning effort" })).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "Execution mode" }), { target: { value: "auto" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Execution mode" }), { target: { value: "full-access" } });
     fireEvent.change(box, { target: { value: "implement this" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0]).toEqual(expect.objectContaining({ identity: expect.objectContaining({ mode: "auto", model: remoteModel.id }) }));
+    expect(sent[0]).toEqual(expect.objectContaining({ identity: expect.objectContaining({ mode: "full-access", model: remoteModel.id }) }));
+    confirm.mockRestore();
   });
 
   it("keeps the default native client stable across boot state updates", async () => {
-    invoke.mockImplementation(async (_command, args: { request: { id: string; op: string; schemaVersion: number } }) => {
+    invoke.mockImplementation(async (command, args: { request: { id: string; op: string; schemaVersion: number } }) => {
+      if (command === "home_directory") return "/home/test";
       const { id, op, schemaVersion } = args.request;
       const results: Record<string, unknown> = {
         daemon_get_health: { daemonVersion: DESKTOP_VERSION, protocol: 1, dataSchemaVersion: 1, uptimeMs: 1, offlineLocalOnly: true },
@@ -72,6 +76,7 @@ describe("App", () => {
         provider_list_connections: { connections: [] },
         provider_auth_methods: { providers: [] },
         provider_gemini_cli_status: { installed: true, configured: false, version: "0.57.0" },
+        workspace_get_root: { path: "/home/test" },
       };
       return { protocol: 1, id, op, schemaVersion, ok: true, result: results[op] };
     });

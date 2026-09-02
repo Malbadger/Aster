@@ -125,7 +125,19 @@ error rather than a false completion.
 
 Read-only delegation is available in Plan mode. Delegated workspace changes
 require the coordinating phase to be in Auto or Full access; Aster does not let
-a model bypass the mode selected by the user.
+a model bypass the mode selected by the user. Full Access is propagated as Full
+Access rather than being silently downgraded to Auto. Results report the actual
+locked mode alongside provider and model attribution.
+
+Aster delegates only against the workspace selected in the application. It
+rejects its temporary AppImage runtime directory and any model-supplied path
+that differs from the active workspace. With no prior selection, Aster safely
+starts in the user's home directory; an explicitly opened folder is remembered.
+
+Delegated tasks expose a native wait operation. Coordinators use it instead of
+shell sleeps, timers, or external monitor tools, and may resume waiting with the
+same task ID after a timeout or follow-up. Claude Code keeps the same session
+when a follow-up no longer repeats the orchestration command names.
 
 Every response carries a compact provider/model badge. Tool calls, commands,
 results, and permission denials are grouped into collapsed **Tools** disclosures.

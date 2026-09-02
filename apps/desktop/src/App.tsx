@@ -7,7 +7,7 @@ import {
   task_get_events, task_list, task_send_message, task_delete, task_rewind, task_respond_approval,
   usage_get_summary,
   fs_list_directory, fs_read_file, fs_write_file, verify_run,
-  workspace_set_root,
+  workspace_get_root, workspace_set_root,
   attachment_import, attachment_stage,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
   provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
@@ -43,6 +43,7 @@ const LAYOUT_KEY = "law.desktop.layout.v2";
 const THEME_KEY = "law.desktop.theme.v1";
 const EDITOR_KEY = "law.desktop.editor.v1";
 const MODE_KEY = "aster.desktop.mode.v1";
+const WORKSPACE_KEY = "aster.desktop.workspace.v1";
 const defaultClient = createIpcClient(tauriTransport);
 
 function loadLayout(): Layout {
@@ -181,7 +182,16 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       const detected = await client.call(daemon_probe_capabilities, { refresh: false });
       setProbe(detected);
       setBootDetail("Loading models and task history…");
-      setHomeDirectory(await Promise.resolve(invoke<string>("home_directory")).catch(() => undefined));
+      const home = await Promise.resolve(invoke<string>("home_directory")).catch(() => undefined);
+      setHomeDirectory(home);
+      const savedWorkspace = localStorage.getItem(WORKSPACE_KEY);
+      let activeWorkspace: string | undefined;
+      if (savedWorkspace) {
+        try { activeWorkspace = (await client.call(workspace_set_root, { path: savedWorkspace })).path; }
+        catch { localStorage.removeItem(WORKSPACE_KEY); }
+      }
+      if (!activeWorkspace) activeWorkspace = (await client.call(workspace_get_root, {})).path ?? home;
+      if (activeWorkspace) setWorkspaceRoot(activeWorkspace);
       await Promise.all([refreshCatalog(), refreshTasks(), refreshProviders(), refreshAuthProviders(), refreshGeminiCli()]);
       const ready = detected.capabilities.filter((capability) => !capability.optional).every((capability) => capability.state === "ready");
       setView(ready ? "workspace" : "setup");
@@ -275,14 +285,14 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     if (action === "new-chat") return newChat();
     if (action === "open-folder" || action === "new-workspace") {
       const chosen = await openNativePath({ directory: true, multiple: false, title: action === "open-folder" ? "Open folder in Aster" : "Choose workspace folder" });
-      if (typeof chosen === "string") { await client.call(workspace_set_root, { path: chosen }); setWorkspaceRoot(chosen); newChat(); }
+      if (typeof chosen === "string") { await client.call(workspace_set_root, { path: chosen }); localStorage.setItem(WORKSPACE_KEY, chosen); setWorkspaceRoot(chosen); newChat(); }
       return;
     }
     if (action === "open-file") {
       const chosen = await openNativePath({ directory: false, multiple: false, title: "Open file in Aster" });
       if (typeof chosen === "string") {
         const root = chosen.slice(0, Math.max(1, chosen.lastIndexOf("/")));
-        await client.call(workspace_set_root, { path: root }); setWorkspaceRoot(root); newChat();
+        await client.call(workspace_set_root, { path: root }); localStorage.setItem(WORKSPACE_KEY, root); setWorkspaceRoot(root); newChat();
         const file = await client.call(fs_read_file, { path: chosen });
         setOpenFile(chosen); setFileContent(file.content); setSavedContent(file.content); setVerification(file.state.verification);
         setLayout((old) => ({ ...old, chat: true })); await openInEditor(editorEngine, chosen);
@@ -437,6 +447,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     const root = chosen.slice(0, Math.max(1, chosen.lastIndexOf("/")));
     await client.call(workspace_set_root, { path: root });
     await client.call(fs_write_file, { path: chosen, content: "", author: "human" });
+    localStorage.setItem(WORKSPACE_KEY, root);
     setWorkspaceRoot(root); setOpenFile(chosen); setFileContent(""); setSavedContent(""); setVerification("unverified");
     setLayout((old) => ({ ...old, chat: true })); await openInEditor(editorEngine, chosen);
     if (!taskId) newChat();

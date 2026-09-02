@@ -33,12 +33,14 @@ import { DESKTOP_VERSION, DATA_SCHEMA_VERSION } from "@law/contracts";
 import { defaultPolicy } from "./ports.js";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { AttachmentService } from "./attachment/attachment-service.js";
 import { McpRegistryService } from "./mcp/mcp-registry-service.js";
 
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
+  const defaultWorkspace = homedir();
   const dataRoot = process.env.LAW_DATA_DIR ?? lawRoot;
   const connectionStore = FileConnectionStore.forRoot(dataRoot);
   const customProviders = () => customProviderSpecs(connectionStore.list());
@@ -69,13 +71,13 @@ async function main(): Promise<void> {
     store: FileTaskStore.forRoot(dataRoot),
     runner: phaseRunner,
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
-    workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : lawRoot),
+    workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : defaultWorkspace),
     attachments,
     orchestrationGuide: loadOrchestrationGuide(lawRoot),
   });
-  const editor = new EditorService({ workspaceRoot: lawRoot, fs: nodeFs });
+  const editor = new EditorService({ workspaceRoot: defaultWorkspace, fs: nodeFs });
   const autocomplete = new AutocompleteService();
-  const git = new GitService(new NodeGit(lawRoot), lawRoot);
+  const git = new GitService(new NodeGit(defaultWorkspace), defaultWorkspace);
   const logging = new LoggingService({
     sink: {
       write: (line) => {
@@ -103,7 +105,7 @@ async function main(): Promise<void> {
     () => ["Windows/macOS deferred (OPEN-D-002)", "Packaging and UAT run on Ubuntu 24.04 (AS-D-001)", "Local models require a loopback endpoint (e.g. Ollama)"],
     () => ["final visual baseline", "live provider login/paid use", "license/trademark review", "release signing and publication"],
   );
-  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about, attachments, mcp });
+  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about, attachments, mcp, workspaceRoot: defaultWorkspace });
   const info = await daemon.start();
 
   // Structured, secret-free startup line (token is NEVER logged).

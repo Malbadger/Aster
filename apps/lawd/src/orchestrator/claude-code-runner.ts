@@ -16,6 +16,7 @@ function sessionUuid(taskId: string): string {
  */
 export class ClaudeCodePhaseRunner implements PhaseRunner {
   private readonly sessions = new Map<string, string>();
+  private readonly orchestrationTasks = new Set<string>();
 
   constructor(
     private readonly executable = process.env.CLAUDE_CODE_PATH ?? "claude",
@@ -26,8 +27,12 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const selected = req.identity.model.startsWith("anthropic:") ? req.identity.model.slice("anthropic:".length) : req.identity.model;
     const mode = req.identity.mode ?? "manual";
-    const delegation = /aster_(?:list_models|delegate_start|delegate_get)/i.test(req.prompt);
-    const binding = `${selected}\0${req.identity.effort}\0${mode}\0${req.workspaceRoot}\0${delegation}`;
+    const requestsDelegation = /aster_(?:list_models|delegate_start|delegate_get|delegate_wait)/i.test(req.prompt);
+    if (requestsDelegation) this.orchestrationTasks.add(req.taskId);
+    const delegation = requestsDelegation || this.orchestrationTasks.has(req.taskId);
+    // Tool discovery is turn-specific and must not fork the provider session.
+    // Identity, mode, effort, and workspace remain the actual session boundary.
+    const binding = `${selected}\0${req.identity.effort}\0${mode}\0${req.workspaceRoot}`;
     const sessionId = sessionUuid(`${req.taskId}:${binding}`);
     const args = [
       "-p", promptWithAttachments(req, true),
@@ -35,18 +40,15 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
       "--permission-mode", permissionMode(mode),
       "--effort", normalizeEffort(req.identity.effort),
     ];
-    if (mode === "plan") args.push("--no-session-persistence");
     if (selected) args.push("--model", selected);
     if (this.mcpConfigPath && existsSync(this.mcpConfigPath)) args.push("--mcp-config", this.mcpConfigPath);
     if (delegation) {
-      const tools = ["mcp__law-ollama__aster_list_models", "mcp__law-ollama__aster_delegate_start", "mcp__law-ollama__aster_delegate_get"];
+      const tools = ["mcp__law-ollama__aster_list_models", "mcp__law-ollama__aster_delegate_start", "mcp__law-ollama__aster_delegate_get", "mcp__law-ollama__aster_delegate_wait"];
       if (req.identity.mode === "auto" || req.identity.mode === "full-access") tools.push("mcp__law-ollama__aster_delegate_start_mutating");
       args.push("--allowedTools", tools.join(","));
     }
-    if (mode !== "plan") {
-      if (this.sessions.get(req.taskId) === binding) args.push("--resume", sessionId);
-      else args.push("--session-id", sessionId);
-    }
+    if (this.sessions.get(req.taskId) === binding) args.push("--resume", sessionId);
+    else args.push("--session-id", sessionId);
     if (req.identity.mode === "full-access") args.push("--dangerously-skip-permissions");
 
     const child = spawn(this.executable, args, {
@@ -72,7 +74,7 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
         let event: Record<string, any>;
         try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
 
-        if (event.type === "system" && event.subtype === "init" && mode !== "plan") this.sessions.set(req.taskId, binding);
+        if (event.type === "system" && event.subtype === "init") this.sessions.set(req.taskId, binding);
         if (event.type === "assistant") {
           for (const block of contentBlocks(event.message?.content)) {
             if (block.type === "text") assistant += String(block.text ?? "");

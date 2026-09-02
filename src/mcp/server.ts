@@ -14,6 +14,7 @@ import {
   selectOllamaModel,
 } from './local-service.js';
 import { callAsterDaemon } from './daemon-client.js';
+import { delegationMarkdown, summarizeDelegation, waitForDelegation, type DelegationEventsResult } from './delegation.js';
 
 const LAW_ROOT = process.env.LAW_PROJECT_ROOT ?? fileURLToPath(new URL('../..', import.meta.url));
 const RESPONSE_LIMIT = 12_000;
@@ -39,18 +40,31 @@ function errorResult(error: unknown) {
   };
 }
 
-async function startDelegation(input: { model?: string; provider?: string; prompt: string; workspace: string; effort: 'minimal' | 'low' | 'medium' | 'high' | 'max'; mode: 'plan' | 'auto'; caller_model?: string; response_format: 'markdown' | 'json' }) {
+async function resolveWorkspace(requested?: string): Promise<string> {
+  const active = await callAsterDaemon<{ path?: string }>('workspace_get_root', {});
+  if (!active.path) throw new Error('No active Aster workspace. Open a folder in Aster before delegating.');
+  const current = realpathSync(active.path);
+  if (/^\/tmp\/(?:\.mount_Aster\.|appimage_extracted_)/.test(current)) throw new Error('Aster refused its internal AppImage runtime as a workspace. Open a real folder first.');
+  if (requested) {
+    const candidate = realpathSync(requested);
+    if (candidate !== current) throw new Error(`Requested workspace "${candidate}" does not match Aster's active workspace "${current}".`);
+  }
+  return current;
+}
+
+async function startDelegation(input: { model?: string; provider?: string; prompt: string; workspace?: string; effort: 'minimal' | 'low' | 'medium' | 'high' | 'max'; mode: 'plan' | 'auto' | 'full-access'; caller_model?: string; response_format: 'markdown' | 'json' }) {
   const { model, provider, prompt, workspace, effort, mode, caller_model, response_format } = input;
   if (!model && !provider) throw new Error('Provide an exact model ID or a provider with a configured default.');
   const resolved = await callAsterDaemon<{ model: { id: string; displayName: string; provider: string; locality: 'local' | 'remote' | 'unknown'; availability: string; effort: { supported: string[] } }; source: 'explicit' | 'provider-default' }>('model_resolve_target', { ...(model ? { modelId: model } : {}), ...(provider ? { provider } : {}) });
   const target = resolved.model;
+  const activeWorkspace = await resolveWorkspace(workspace);
   if (caller_model && caller_model === target.id) throw new Error('Refused recursive delegation to the calling model. Choose a different model.');
   if (!target.effort.supported.includes(effort)) throw new Error(`Model "${target.id}" does not support effort "${effort}". Supported: ${target.effort.supported.join(', ')}.`);
   const identity = { provider: target.provider, model: target.id, effort, mode, locality: target.locality };
-  const created = await callAsterDaemon<{ task: { taskId: string } }>('task_create', { title: `Delegated · ${target.displayName}`, workspaceId: workspace, defaultIdentity: identity });
+  const created = await callAsterDaemon<{ task: { taskId: string } }>('task_create', { title: `Delegated · ${target.displayName}`, workspaceId: activeWorkspace, defaultIdentity: identity });
   const sent = await callAsterDaemon<{ status: string }>('task_send_message', { taskId: created.task.taskId, text: prompt, identity, attachmentIds: [], attachmentEgressApproved: false });
   const output = { task_id: created.task.taskId, model: target.id, provider: target.provider, resolution: resolved.source, mode, status: sent.status };
-  return textResult(output, response_format, `Started ${mode === 'plan' ? 'read-only ' : ''}Aster delegation **${created.task.taskId}** with **${target.id}** (${resolved.source}). Poll \`aster_delegate_get\` until it settles.`);
+  return textResult(output, response_format, `Started ${mode === 'plan' ? 'read-only ' : ''}Aster delegation **${created.task.taskId}** with **${target.id}** (${resolved.source}, mode ${mode}). Call \`aster_delegate_wait\` with this task ID.`);
 }
 
 export function createLawMcpServer(): McpServer {
@@ -85,7 +99,7 @@ export function createLawMcpServer(): McpServer {
         model: z.string().min(1).max(300).optional().describe('Exact provider-qualified ID from aster_list_models. Takes precedence over provider default.'),
         provider: z.string().min(1).max(200).optional().describe('Provider whose configured default should be used when model is omitted.'),
         prompt: z.string().min(1).max(30_000).describe('Self-contained task and expected return format.'),
-        workspace: z.string().min(1).max(4_096).describe('Absolute workspace associated with the task.'),
+        workspace: z.string().min(1).max(4_096).optional().describe("Optional active Aster workspace. If supplied, it must exactly match Aster's selected workspace."),
         effort: z.enum(['minimal', 'low', 'medium', 'high', 'max']).default('medium'),
         mode: z.literal('plan').default('plan'),
         caller_model: z.string().max(300).optional().describe('Calling model ID; delegation to the same model is refused.'),
@@ -103,16 +117,17 @@ export function createLawMcpServer(): McpServer {
     'aster_delegate_start_mutating',
     {
       title: 'Delegate Workspace Changes to an Aster Model',
-      description: 'Starts a bounded Auto-mode Aster task that may modify the selected workspace. Use only when the user explicitly requested changes and the coordinating Aster phase is Auto or Full access.',
+      description: 'Starts a bounded Auto or Full Access Aster task that may modify the selected workspace. The required mode must match the coordinating Aster phase.',
       inputSchema: {
-        model: z.string().min(1).max(300).optional(), provider: z.string().min(1).max(200).optional(), prompt: z.string().min(1).max(30_000), workspace: z.string().min(1).max(4_096),
+        model: z.string().min(1).max(300).optional(), provider: z.string().min(1).max(200).optional(), prompt: z.string().min(1).max(30_000), workspace: z.string().min(1).max(4_096).optional(),
         effort: z.enum(['minimal', 'low', 'medium', 'high', 'max']).default('medium'),
+        mode: z.enum(['auto', 'full-access']).describe('Must match the coordinating Aster phase mode.'),
         caller_model: z.string().max(300).optional(), response_format: formatSchema,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ model, provider, prompt, workspace, effort, caller_model, response_format }) => {
-      try { return await startDelegation({ ...(model ? { model } : {}), ...(provider ? { provider } : {}), prompt, workspace, effort, mode: 'auto', ...(caller_model ? { caller_model } : {}), response_format }); }
+    async ({ model, provider, prompt, workspace, effort, mode, caller_model, response_format }) => {
+      try { return await startDelegation({ ...(model ? { model } : {}), ...(provider ? { provider } : {}), prompt, ...(workspace ? { workspace } : {}), effort, mode, ...(caller_model ? { caller_model } : {}), response_format }); }
       catch (error) { return errorResult(error); }
     },
   );
@@ -127,21 +142,31 @@ export function createLawMcpServer(): McpServer {
     },
     async ({ task_id, response_format }) => {
       try {
-        const result = await callAsterDaemon<{ events: Array<{ kind: string; text?: string; data?: Record<string, unknown> }>; taskStatus: string }>('task_get_events', { taskId: task_id, sinceSeq: 0 });
-        const assistant = result.events.filter((event) => event.kind === 'assistant' && event.text?.trim()).at(-1);
-        const error = result.events.filter((event) => event.kind === 'error').at(-1);
-        const identityEvent = [...result.events].reverse().find((event) => event.data?.identity);
-        const identity = identityEvent?.data?.identity as { provider?: string; model?: string } | undefined;
-        const usage = result.events.reduce((total, event) => {
-          const item = event.data?.usage as { input?: number; output?: number } | undefined;
-          return { input: total.input + (item?.input ?? 0), output: total.output + (item?.output ?? 0) };
-        }, { input: 0, output: 0 });
-        const emptyCompletion = result.taskStatus === 'completed' && !assistant && !error;
-        const effectiveError = error?.text ?? (emptyCompletion ? 'Delegated model completed without returning a response.' : undefined);
-        const status = emptyCompletion ? 'error' : result.taskStatus;
-        const output = { task_id, status, provider: identity?.provider, model: identity?.model, response: assistant?.text, error: effectiveError, usage };
-        const detail = effectiveError ?? assistant?.text ?? 'The delegated model is still working.';
-        return textResult(output, response_format, `# Delegation ${task_id}\n\n- Status: ${status}\n- Provider: ${identity?.provider ?? 'pending'}\n- Model: ${identity?.model ?? 'pending'}\n- Usage: ${usage.input} input · ${usage.output} output\n\n${detail}`);
+        const result = await callAsterDaemon<DelegationEventsResult>('task_get_events', { taskId: task_id, sinceSeq: 0 });
+        const output = summarizeDelegation(task_id, result);
+        return textResult(output as unknown as Record<string, unknown>, response_format, delegationMarkdown(output));
+      } catch (error) { return errorResult(error); }
+    },
+  );
+
+  server.registerTool(
+    'aster_delegate_wait',
+    {
+      title: 'Wait for Aster Delegation',
+      description: 'Waits natively for an existing delegated task to settle. Use this instead of Bash sleeps, timers, Monitor, or repeated tight polling. Safe to call again with the same task ID after timeout or follow-up.',
+      inputSchema: {
+        task_id: z.string().min(1).max(200),
+        timeout_ms: z.number().int().min(1_000).max(900_000).default(300_000),
+        poll_interval_ms: z.number().int().min(250).max(10_000).default(1_500),
+        response_format: formatSchema,
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ task_id, timeout_ms, poll_interval_ms, response_format }) => {
+      try {
+        const output = await waitForDelegation(task_id, timeout_ms, poll_interval_ms, () =>
+          callAsterDaemon<DelegationEventsResult>('task_get_events', { taskId: task_id, sinceSeq: 0 }));
+        return textResult(output as unknown as Record<string, unknown>, response_format, delegationMarkdown(output));
       } catch (error) { return errorResult(error); }
     },
   );

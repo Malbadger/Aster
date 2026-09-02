@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapPiEvent } from '../../src/pi-adapter/sdk-adapter.js';
+import { mapPiEvent, usageFromPiEvent } from '../../src/pi-adapter/sdk-adapter.js';
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
 function event(value: unknown): AgentSessionEvent {
@@ -23,5 +23,11 @@ describe('Pi SDK event mapping', () => {
       kind: 'error',
       message: 'Extra usage is required.',
     });
+  });
+
+  it('extracts provider usage from a finalized assistant message', () => {
+    const completed = event({ type: 'message_end', message: { role: 'assistant', content: [], usage: { input: 84, output: 21 } } });
+    expect(usageFromPiEvent(completed)).toEqual({ input: 84, output: 21 });
+    expect(usageFromPiEvent(event({ type: 'message_end', message: { role: 'user', usage: { input: 10, output: 0 } } }))).toBeNull();
   });
 });

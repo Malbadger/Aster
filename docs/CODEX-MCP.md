@@ -10,6 +10,7 @@ opens no network listener. Ollama traffic is restricted to `http://127.0.0.1:114
 - `aster_delegate_start` — start a read-only task using an exact model or provider default.
 - `aster_delegate_start_mutating` — start an Auto-mode workspace task when explicitly authorized.
 - `aster_delegate_get` — poll a task for exact attribution, usage, response, or error.
+- `aster_delegate_wait` — wait natively for a task to settle without shell timers or tight polling.
 
 - `law_ollama_list_models` — list models installed in local Ollama.
 - `law_ollama_select_model` — choose the default model for new runs.
@@ -22,7 +23,9 @@ opens no network listener. Ollama traffic is restricted to `http://127.0.0.1:114
 The model is locked when each run starts. Changing a default affects only later runs. An
 exact model always takes precedence over a provider default; missing and unavailable targets
 fail without substitution. Mutating delegation is exposed separately and remains subject to
-Aster's selected execution mode and policy gates.
+Aster's selected execution mode and policy gates. Its `mode` argument is required and preserves
+Auto or Full Access exactly. Delegation always uses Aster's active workspace and rejects
+temporary AppImage runtime paths.
 
 ## Codex configuration
 

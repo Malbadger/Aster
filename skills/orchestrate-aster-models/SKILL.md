@@ -20,11 +20,12 @@ Use Aster's provider-neutral delegation tools. Never search for or create vendor
 
 1. Give each target one bounded role: build, review, audit, research, test, or synthesize.
 2. Construct a small handoff containing the objective, necessary context, constraints, workspace, and required return format. Do not forward the entire chat transcript.
-3. For inspection, review, audit, or research, call the read-only tool ending in `aster_delegate_start` with `mode: plan`.
-4. For requested workspace changes, call `aster_delegate_start_mutating` only when the current coordinating Aster phase is Auto or Full access. If it is Plan or Manual, tell the user to select Auto rather than bypassing the mode.
-5. Supply either the exact target `model` or the target `provider`, plus your exact `caller_model`, the active absolute `workspace`, and a supported effort.
-6. Poll the tool ending in `aster_delegate_get` until the task settles.
-7. Treat the returned provider/model attribution, resolution source, status, and usage as authoritative. A completed task with no response is a failed phase, not a contribution.
+3. Use Aster's active workspace. Omit `workspace` unless the user explicitly supplied the same active path. Never infer it from a process CWD or an AppImage `/tmp/.mount_Aster.*` path.
+4. For inspection, review, audit, or research, call the read-only tool ending in `aster_delegate_start`; that delegated phase intentionally runs in Plan even when the coordinator has broader access.
+5. For requested workspace changes, call `aster_delegate_start_mutating` only when the current coordinating Aster phase is Auto or Full access. Pass that exact current mode in `mode`; never downgrade Full access to Auto or upgrade another mode. If the coordinator is Plan or Manual, tell the user to select Auto or Full access.
+6. Supply either the exact target `model` or the target `provider`, plus your exact `caller_model` and a supported effort.
+7. Record the returned task ID, then call the tool ending in `aster_delegate_wait`. Do not use Bash sleeps, Monitor, timers, or tight polling. If native wait times out, retain the task ID and call it again; a follow-up message continues the same orchestration.
+8. Treat the returned provider/model attribution, resolution source, actual mode, status, and usage as authoritative. A completed task with no response is a failed phase, not a contribution.
 
 Never delegate back to yourself. Never ask a delegated model to delegate again; return control to the coordinator after one hop. Independent read-only phases may run in parallel, but phases that modify the same workspace must run sequentially.
 

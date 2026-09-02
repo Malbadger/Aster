@@ -221,6 +221,8 @@ class SdkSession implements PiSession {
     const unsub = this.session.subscribe((ev: AgentSessionEvent) => {
       const mapped = mapPiEvent(ev);
       if (mapped) push(mapped);
+      const usage = usageFromPiEvent(ev);
+      if (usage) push({ kind: 'usage', ...usage });
       const t = (ev as { type?: string }).type;
       if (t === 'agent_settled' || t === 'agent_end') {
         settled = true;
@@ -345,6 +347,15 @@ export function mapPiEvent(ev: AgentSessionEvent): LawEvent | null {
     default:
       return null;
   }
+}
+
+/** Extract authoritative per-turn provider usage from the finalized assistant message. */
+export function usageFromPiEvent(ev: AgentSessionEvent): { input: number; output: number } | null {
+  const e = ev as { type?: string; message?: { role?: string; usage?: { input?: unknown; output?: unknown } } };
+  if (e.type !== 'message_end' || e.message?.role !== 'assistant' || !e.message.usage) return null;
+  const input = typeof e.message.usage.input === 'number' ? e.message.usage.input : 0;
+  const output = typeof e.message.usage.output === 'number' ? e.message.usage.output : 0;
+  return { input, output };
 }
 
 function extractText(e: Record<string, unknown>): string {

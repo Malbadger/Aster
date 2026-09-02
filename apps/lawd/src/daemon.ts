@@ -114,6 +114,7 @@ export interface DaemonOptions {
   clock?: Clock;
   socketPath?: string;
   token?: string;
+  workspaceRoot?: string;
 }
 
 export class Daemon {
@@ -169,6 +170,7 @@ export class Daemon {
     this.clock = opts.clock ?? systemClock;
     this.token = opts.token ?? newToken();
     this.socketPath = opts.socketPath ?? defaultSocketPath();
+    this.workspaceRoot = opts.workspaceRoot;
 
     const registry = createContractRegistry();
     this.dispatcher = new Dispatcher(registry, this.token);
@@ -340,6 +342,7 @@ export class Daemon {
       const requested = (payload as { path: string }).path;
       if (!isAbsolute(requested)) throw Object.assign(new Error("workspace path must be absolute"), { code: "BAD_REQUEST" });
       const path = resolve(requested);
+      if (/^\/tmp\/(?:\.mount_Aster\.|appimage_extracted_)/.test(path)) throw Object.assign(new Error("the AppImage runtime cannot be used as a workspace"), { code: "BAD_REQUEST" });
       if (!existsSync(path) || !statSync(path).isDirectory()) throw Object.assign(new Error("workspace directory does not exist"), { code: "NOT_FOUND" });
       this.editor.setWorkspaceRoot(path);
       this.git.setRepository(path);
