@@ -37,7 +37,7 @@ describe("App", () => {
     const result = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(result.violations).toEqual([]);
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toHaveFocus());
-    expect(screen.queryByRole("group", { name: "Reasoning effort" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Reasoning effort" })).toBeNull();
   });
 
   it("shows effort for supported remote models and sends the selected Auto mode", async () => {
@@ -53,7 +53,7 @@ describe("App", () => {
     } as IpcClient;
     render(<App client={modeClient} />);
     const box = await screen.findByRole("textbox", { name: "Message" });
-    expect(screen.getByRole("group", { name: "Reasoning effort" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Reasoning effort" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Execution mode" }), { target: { value: "auto" } });
     fireEvent.change(box, { target: { value: "implement this" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));

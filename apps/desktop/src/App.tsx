@@ -25,7 +25,6 @@ import { VscodiumEditor } from "./components/VscodiumEditor.js";
 import { SettingsPanel, type EditorEngine, type LawTheme, type SettingsTab } from "./components/SettingsPanel.js";
 import type { AddConnectionForm } from "./components/ProviderConnections.js";
 import { FlatModelSelector } from "./components/FlatModelSelector.js";
-import { EffortControl } from "./components/EffortControl.js";
 import { FirstRunSetup } from "./components/FirstRunSetup.js";
 import { StartSurface, type StartAction } from "./components/StartSurface.js";
 import { TaskHistory } from "./components/TaskHistory.js";
@@ -543,7 +542,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const controls = <div className="composer-controls">
     <div className="model-popover-anchor">
       <button className="model-trigger" type="button" aria-expanded={modelOpen} onClick={() => setModelOpen((open) => !open)}>
-        <span>{selected?.displayName ?? "Select model"}</span><small>{selected ? `${selected.provider} · ${selected.locality}` : "No model available"}</small>
+        <svg className="composer-control-icon" aria-hidden viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></svg>
+        <span>{selected?.displayName ?? "Select model"}</span>
+        <svg className="composer-chevron" aria-hidden viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>
       </button>
       {modelOpen && <div className="model-popover"><FlatModelSelector models={models} selectedId={selectedId} favorites={favorites} query={query}
         onQueryChange={(value) => { setQuery(value); void refreshCatalog(value); }}
@@ -555,9 +556,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
         }}
         onToggleFavorite={(modelId, favorite) => void client.call(model_set_favorite, { modelId, favorite }).then((result) => setFavorites(result.favorites))} /></div>}
     </div>
-    {showsEffortControl(selected) && <div className="effort-control-group"><span className="effort-label">Effort</span><EffortControl value={effort} supported={selected.effort.supported} onChange={setEffort} /></div>}
+    {showsEffortControl(selected) && <label className="composer-select-control effort-select-control" title="Reasoning effort">
+      <svg className="composer-control-icon" aria-hidden viewBox="0 0 24 24"><path d="M4 15a8 8 0 0 1 16 0"/><path d="m12 15 4-6"/></svg>
+      <select aria-label="Reasoning effort" value={effort} onChange={(event) => setEffort(event.target.value as EffortLevel)}>
+        {selected.effort.supported.map((level) => <option key={level} value={level}>{level[0]!.toUpperCase() + level.slice(1)}</option>)}
+      </select>
+      <svg className="composer-chevron" aria-hidden viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>
+    </label>}
     <label className={`mode-control mode-${mode}`} title="Execution permission mode">
-      <span>Mode</span>
+      <svg className="composer-control-icon" aria-hidden viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
       <select aria-label="Execution mode" value={mode} onChange={(event) => {
         const next = event.target.value as ExecutionMode;
         if (next === "full-access" && !window.confirm("Full access runs configured tools without per-action approval. Continue?")) return;
@@ -565,6 +572,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       }}>
         <option value="plan">Plan</option><option value="manual">Manual</option><option value="auto">Auto</option><option value="full-access">Full access</option>
       </select>
+      <svg className="composer-chevron" aria-hidden viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>
     </label>
   </div>;
 

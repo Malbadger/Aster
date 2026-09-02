@@ -83,7 +83,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
     if (!composer) return;
     composer.style.height = "auto";
     const maximum = Math.min(320, Math.max(160, Math.floor(window.innerHeight * 0.36)));
-    const height = Math.min(maximum, Math.max(42, composer.scrollHeight));
+    const height = Math.min(maximum, Math.max(96, composer.scrollHeight));
     composer.style.height = `${height}px`;
     composer.style.overflowY = composer.scrollHeight > maximum ? "auto" : "hidden";
   }, [text]);
@@ -133,58 +133,63 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
       </ol>
 
       <div className="composer-wrap">
-        {props.controls && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{props.controls}</div>}
         {props.composerNotice}
-        {(props.attachments?.length ?? 0) > 0 && <div className="attachment-tray" aria-label="Message attachments">{props.attachments!.map((attachment) => <span className="attachment-chip" key={attachment.attachmentId} title={`${attachment.mimeType} · ${formatBytes(attachment.size)}`}>
-          <i aria-hidden>{kindMark(attachment.kind)}</i><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.size)}</small></span><button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => props.onRemoveAttachment?.(attachment.attachmentId)}>×</button>
-        </span>)}</div>}
-        <div className="composer-row">
-          <button className="attach-button" type="button" aria-label="Attach files" title="Attach files" disabled={props.attachmentBusy || props.running} onClick={props.onChooseAttachments}>
-            <svg aria-hidden viewBox="0 0 24 24"><path d="M9.5 12.5l5.9-5.9a3 3 0 114.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.1-8.1" /></svg>
-          </button>
-          <span className="composer-prompt" aria-hidden>›</span>
-          <textarea
-            ref={composerRef}
-            aria-label="Message"
-            autoFocus
-            value={text}
-            onChange={(e) => { setText(e.target.value); setHistoryIndex(undefined); }}
-            onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); props.onFiles?.(files); } }}
-            onKeyDown={(e) => {
-              if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-                const target = e.currentTarget;
-                const onFirstLine = target.selectionStart <= Math.max(0, text.indexOf("\n"));
-                const onLastLine = text.indexOf("\n", target.selectionEnd) === -1;
-                if (e.key === "ArrowUp" && promptHistory.length && (historyIndex !== undefined || onFirstLine)) {
-                  e.preventDefault();
-                  if (historyIndex === undefined) draftBeforeHistory.current = text;
-                  const next = historyIndex === undefined ? promptHistory.length - 1 : Math.max(0, historyIndex - 1);
-                  setHistoryIndex(next); setText(promptHistory[next]!);
-                  requestAnimationFrame(() => target.setSelectionRange(promptHistory[next]!.length, promptHistory[next]!.length));
-                  return;
-                }
-                if (e.key === "ArrowDown" && historyIndex !== undefined && onLastLine) {
-                  e.preventDefault();
-                  const next = historyIndex + 1;
-                  if (next >= promptHistory.length) { setHistoryIndex(undefined); setText(draftBeforeHistory.current); }
-                  else { setHistoryIndex(next); setText(promptHistory[next]!); }
-                  return;
-                }
-              }
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-            rows={3}
-            className="chat-composer-input"
-            placeholder="Message or /command…"
-          />
-          {props.running ? (
-            <button type="button" onClick={props.onStop} style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-danger)", background: "transparent", color: "var(--law-color-danger)", cursor: "pointer" }}>Stop</button>
-          ) : (
-            <button type="button" disabled={submitting || props.attachmentBusy} onClick={() => void submit()} aria-label="Send" style={{ minHeight: 40, padding: "0 14px", borderRadius: 5, border: "1px solid var(--law-color-accent)", background: "var(--law-color-accent)", color: "var(--law-color-on-accent)", cursor: "pointer" }}>{submitting ? "Reviewing…" : props.attachmentBusy ? "Attaching…" : "Send"}</button>
-          )}
+        <div className="composer-shell">
+          <div className="composer-body">
+            {(props.attachments?.length ?? 0) > 0 && <div className="attachment-tray" aria-label="Message attachments">{props.attachments!.map((attachment) => <span className="attachment-chip" key={attachment.attachmentId} title={`${attachment.mimeType} · ${formatBytes(attachment.size)}`}>
+              <i aria-hidden>{kindMark(attachment.kind)}</i><span><strong>{attachment.name}</strong><small>{formatBytes(attachment.size)}</small></span><button type="button" aria-label={`Remove ${attachment.name}`} onClick={() => props.onRemoveAttachment?.(attachment.attachmentId)}>×</button>
+            </span>)}</div>}
+            <div className="composer-row">
+              <button className="attach-button" type="button" aria-label="Attach files" title="Attach files" disabled={props.attachmentBusy || props.running} onClick={props.onChooseAttachments}>
+                <svg aria-hidden viewBox="0 0 24 24"><path d="M9.5 12.5l5.9-5.9a3 3 0 114.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.1-8.1" /></svg>
+              </button>
+              <textarea
+                ref={composerRef}
+                aria-label="Message"
+                autoFocus
+                value={text}
+                onChange={(e) => { setText(e.target.value); setHistoryIndex(undefined); }}
+                onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); props.onFiles?.(files); } }}
+                onKeyDown={(e) => {
+                  if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+                    const target = e.currentTarget;
+                    const onFirstLine = target.selectionStart <= Math.max(0, text.indexOf("\n"));
+                    const onLastLine = text.indexOf("\n", target.selectionEnd) === -1;
+                    if (e.key === "ArrowUp" && promptHistory.length && (historyIndex !== undefined || onFirstLine)) {
+                      e.preventDefault();
+                      if (historyIndex === undefined) draftBeforeHistory.current = text;
+                      const next = historyIndex === undefined ? promptHistory.length - 1 : Math.max(0, historyIndex - 1);
+                      setHistoryIndex(next); setText(promptHistory[next]!);
+                      requestAnimationFrame(() => target.setSelectionRange(promptHistory[next]!.length, promptHistory[next]!.length));
+                      return;
+                    }
+                    if (e.key === "ArrowDown" && historyIndex !== undefined && onLastLine) {
+                      e.preventDefault();
+                      const next = historyIndex + 1;
+                      if (next >= promptHistory.length) { setHistoryIndex(undefined); setText(draftBeforeHistory.current); }
+                      else { setHistoryIndex(next); setText(promptHistory[next]!); }
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void submit();
+                  }
+                }}
+                rows={4}
+                className="chat-composer-input"
+                placeholder="Message or /command…"
+              />
+            </div>
+          </div>
+          <div className="composer-footer">
+            {props.controls && <div className="composer-footer-controls">{props.controls}</div>}
+            {props.running ? (
+              <button type="button" className="composer-stop" onClick={props.onStop}>Stop</button>
+            ) : (
+              <button type="button" className="composer-send" disabled={submitting || props.attachmentBusy} onClick={() => void submit()} aria-label="Send"><span>{submitting ? "Reviewing…" : props.attachmentBusy ? "Attaching…" : "Send"}</span><svg aria-hidden viewBox="0 0 20 20"><path d="M10 15V4m0 0L5.5 8.5M10 4l4.5 4.5" /></svg></button>
+            )}
+          </div>
         </div>
       </div>
     </section>

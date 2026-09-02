@@ -203,15 +203,17 @@ button:disabled { cursor: not-allowed; }
 .event-attachments { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 .event-attachments small { padding: 2px 6px; border-left: 2px solid var(--law-color-accent); background: var(--law-color-bg-input); color: var(--law-color-text-muted); font: 10px/1.5 "IBM Plex Mono", monospace; }
 .composer-wrap { padding: 10px clamp(12px, 3vw, 34px) 14px; display: flex; flex-direction: column; gap: 7px; }
-.composer-row { display: flex; align-items: flex-start; gap: 7px; padding: 8px; border: 1px solid var(--law-color-border-strong); border-radius: 5px; background: var(--law-color-bg-input); box-shadow: 0 8px 28px rgba(0,0,0,.16), inset 2px 0 var(--law-color-accent); }
-.composer-prompt { flex: 0 0 19px; padding-top: 8px; color: var(--law-color-accent-strong); font: 700 18px/1 "IBM Plex Mono", "DejaVu Sans Mono", monospace; text-align: center; }
-.composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 42px; max-height: min(320px, 36vh); padding: 7px 6px; border: 0 !important; outline: 0; resize: none !important; overflow-y: hidden; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 13px/1.55 "IBM Plex Mono", "DejaVu Sans Mono", monospace; transition: height .12s ease; }
+.composer-shell { overflow: visible; border: 1px solid var(--law-color-border-strong); border-radius: 12px; background: var(--law-color-bg-input); box-shadow: 0 12px 34px rgba(0,0,0,.15); transition: border-color .14s ease, box-shadow .14s ease; }
+.composer-shell:focus-within { border-color: var(--law-color-accent-strong); box-shadow: 0 0 0 1px var(--law-color-accent), 0 14px 38px rgba(0,0,0,.18); }
+.composer-body { min-height: 116px; padding: 14px 16px 8px; }
+.composer-row { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.composer-row textarea.chat-composer-input { flex: 1; min-width: 0; min-height: 96px; max-height: min(320px, 36vh); padding: 8px 4px; border: 0 !important; outline: 0; resize: none !important; overflow-y: hidden; background: transparent !important; color: var(--law-color-text) !important; caret-color: var(--law-color-accent-strong); -webkit-text-fill-color: var(--law-color-text); opacity: 1; font: 14px/1.55 "IBM Plex Mono", "DejaVu Sans Mono", monospace; transition: height .12s ease; }
 .composer-row textarea.chat-composer-input::placeholder { color: var(--law-color-text-faint); -webkit-text-fill-color: var(--law-color-text-faint); opacity: 1; }
 .composer-row textarea.chat-composer-input::selection { color: var(--law-color-text); background: color-mix(in srgb, var(--law-color-accent) 42%, transparent); }
-.attach-button { flex: 0 0 30px; width: 30px; height: 30px; margin-top: 3px; display: grid; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--law-color-text-muted); cursor: pointer; }
+.attach-button { flex: 0 0 34px; width: 34px; height: 34px; margin-top: 3px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--law-color-text-muted); cursor: pointer; }
 .attach-button:hover, .attach-button:focus-visible { background: var(--law-color-bg-elevated); color: var(--law-color-accent-strong); }
 .attach-button:disabled { opacity: .4; cursor: wait; }
-.attach-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.attach-button svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .attachment-tray { display: flex; flex-wrap: wrap; gap: 6px; }
 .attachment-chip { max-width: 240px; min-height: 38px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 5px 6px 5px 8px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-input); color: var(--law-color-text); }
 .attachment-chip > i { color: var(--law-color-accent-strong); font: 700 9px/1 "IBM Plex Mono", monospace; font-style: normal; }
@@ -243,16 +245,24 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
 .primary, .empty-panel button, .error-banner button { min-height: 32px; padding: 5px 11px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
 .primary { border-color: var(--law-color-accent); background: var(--law-color-accent); color: var(--law-color-on-accent); }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 14px; border-bottom: 1px solid var(--law-color-danger); color: var(--law-color-danger); background: color-mix(in srgb, var(--law-color-danger) 7%, var(--law-color-bg-panel)); }
-.composer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: 100%; }
-.mode-control { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 8px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); color: var(--law-color-text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
-.mode-control select { border: 0; outline: 0; background: transparent; color: var(--law-color-text); font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer; }
+.composer-footer { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-top: 1px solid var(--law-color-border); background: color-mix(in srgb, var(--law-color-bg-panel) 58%, var(--law-color-bg-input)); border-radius: 0 0 11px 11px; }
+.composer-footer-controls, .composer-controls { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.mode-control, .composer-select-control { min-width: 148px; min-height: 38px; display: inline-flex; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid var(--law-color-border); border-radius: 7px; background: var(--law-color-bg-input); color: var(--law-color-text-muted); }
+.mode-control select, .composer-select-control select { flex: 1; min-width: 0; appearance: none; border: 0; outline: 0; background: transparent; color: var(--law-color-text); font: 12px/1.2 "IBM Plex Sans", "DejaVu Sans", sans-serif; cursor: pointer; }
+.composer-control-icon { flex: 0 0 20px; width: 20px; height: 20px; fill: none; stroke: var(--law-color-accent-strong); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.composer-chevron { flex: 0 0 14px; width: 14px; height: 14px; fill: none; stroke: var(--law-color-text-muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.composer-send, .composer-stop { min-width: 104px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 0 15px; border-radius: 7px; cursor: pointer; }
+.composer-send { border: 1px solid var(--law-color-accent); background: var(--law-color-accent); color: var(--law-color-on-accent); }
+.composer-send svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.composer-send:disabled { opacity: .55; cursor: wait; }
+.composer-stop { border: 1px solid var(--law-color-danger); background: transparent; color: var(--law-color-danger); }
 .mode-full-access { border-color: var(--law-color-danger); }
 .approval-actions { display: flex; gap: 7px; margin-top: 8px; }
 .approval-actions button { padding: 5px 10px; border: 1px solid var(--law-color-border); border-radius: 5px; background: var(--law-color-bg-elevated); color: var(--law-color-text); cursor: pointer; }
 .approval-actions button:first-child { border-color: var(--law-color-accent); color: var(--law-color-accent-strong); }
 .model-popover-anchor { position: relative; }
-.model-trigger { min-width: 176px; display: flex; flex-direction: column; align-items: flex-start; padding: 5px 9px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
-.model-trigger small { color: var(--law-color-text-faint); font-size: 10px; }
+.model-trigger { min-width: 188px; min-height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid var(--law-color-border); border-radius: 7px; background: var(--law-color-bg-input); color: var(--law-color-text); cursor: pointer; }
+.model-trigger > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; font: 12px/1.2 "IBM Plex Sans", "DejaVu Sans", sans-serif; }
 .model-popover { position: absolute; z-index: 20; left: 0; bottom: calc(100% + 8px); padding: 8px; border: 1px solid var(--law-color-border-strong); border-radius: 8px; background: var(--law-color-bg-panel); box-shadow: 0 18px 50px rgba(0, 0, 0, .28); }
 .effort-label, .empty-kicker { color: var(--law-color-text-faint); font-family: "IBM Plex Mono", "DejaVu Sans Mono", monospace; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
 .effort-control-group { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 7px; border: 1px solid var(--law-color-border); border-radius: 6px; background: var(--law-color-bg-input); }
@@ -376,7 +386,7 @@ select, select option { background-color: var(--law-color-bg-input); color: var(
   .endpoint-grid { grid-template-columns: 1fr; }
   .endpoint-wide, .endpoint-grid .endpoint-check { grid-column: 1; }
 }
-@media (max-width: 900px) { .titlebar { grid-template-columns: auto 1fr; } .runtime-state { display: none; } .composer-controls { flex-wrap: wrap; } .primary-grid.split { flex-direction: column; } .primary-grid.split .chat-pane, .primary-grid.split .editor-pane { flex: 1 1 50% !important; } .primary-grid.split .center-resizer { width: 100%; height: 5px; cursor: row-resize; } .workbench-sidebar { width: 230px !important; } }
+@media (max-width: 900px) { .titlebar { grid-template-columns: auto 1fr; } .runtime-state { display: none; } .composer-footer { align-items: flex-end; } .composer-footer-controls, .composer-controls { flex-wrap: wrap; } .model-trigger { min-width: 164px; } .mode-control, .composer-select-control { min-width: 126px; } .primary-grid.split { flex-direction: column; } .primary-grid.split .chat-pane, .primary-grid.split .editor-pane { flex: 1 1 50% !important; } .primary-grid.split .center-resizer { width: 100%; height: 5px; cursor: row-resize; } .workbench-sidebar { width: 230px !important; } }
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;

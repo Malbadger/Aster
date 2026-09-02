@@ -25,13 +25,13 @@ describe("ChatPanel", () => {
     const onSend = vi.fn();
     render(<ChatPanel events={[]} running={false} onSend={onSend} onStop={() => {}} />);
     const box = screen.getByLabelText("Message") as HTMLTextAreaElement;
-    Object.defineProperty(box, "scrollHeight", { configurable: true, get: () => box.value ? 190 : 42 });
+    Object.defineProperty(box, "scrollHeight", { configurable: true, get: () => box.value ? 190 : 96 });
     fireEvent.change(box, { target: { value: "do it\nwith a much longer prompt" } });
     await waitFor(() => expect(box.style.height).toBe("190px"));
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(onSend).toHaveBeenCalledWith("do it\nwith a much longer prompt");
     await waitFor(() => expect(box).toHaveValue(""));
-    await waitFor(() => expect(box.style.height).toBe("42px"));
+    await waitFor(() => expect(box.style.height).toBe("96px"));
   });
 
   it("shows Stop instead of Send while running", () => {
