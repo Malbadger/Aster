@@ -11,11 +11,11 @@ async function collect(runner: ClaudeCodePhaseRunner, req: PhaseRunRequest): Pro
   return events;
 }
 
-function request(taskId = "claude-task"): PhaseRunRequest {
+function request(taskId = "claude-task", prompt = "Review this workspace", mode: PhaseRunRequest["identity"]["mode"] = "plan"): PhaseRunRequest {
   return {
     taskId,
-    identity: { provider: "anthropic", model: "anthropic:claude-sonnet-4-6", effort: "medium", mode: "plan" },
-    prompt: "Review this workspace",
+    identity: { provider: "anthropic", model: "anthropic:claude-sonnet-4-6", effort: "medium", mode },
+    prompt,
     tools: [],
     workspaceRoot: tmpdir(),
     allowMutation: false,
@@ -64,5 +64,34 @@ describe("ClaudeCodePhaseRunner", () => {
     expect(await collect(new ClaudeCodePhaseRunner(executable), request("error"))).toEqual([
       { kind: "error", message: "This model requires usage credits." },
     ]);
+  });
+
+  it("pre-authorizes only Aster's delegation tools for an orchestrated turn", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-claude-code-tools-"));
+    const argvLog = join(dir, "argv.json"); const executable = join(dir, "claude");
+    writeFileSync(executable, `#!/usr/bin/env node
+      require('node:fs').writeFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)));
+      console.log(JSON.stringify({type:'system', subtype:'init'}));
+      console.log(JSON.stringify({type:'result', is_error:false, result:'ok', usage:{input_tokens:1, output_tokens:1}}));
+    `); chmodSync(executable, 0o755);
+    await collect(new ClaudeCodePhaseRunner(executable), request("orchestration", "Use aster_delegate_start and aster_delegate_get"));
+    const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
+    expect(args).toEqual(expect.arrayContaining(["--allowedTools", "mcp__law-ollama__aster_list_models,mcp__law-ollama__aster_delegate_start,mcp__law-ollama__aster_delegate_get"]));
+  });
+
+  it("pre-authorizes mutating delegation only in Auto or Full access", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-claude-code-mutating-tools-"));
+    const argvLog = join(dir, "argv.json"); const executable = join(dir, "claude");
+    writeFileSync(executable, `#!/usr/bin/env node
+      require('node:fs').writeFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)));
+      console.log(JSON.stringify({type:'system', subtype:'init'}));
+      console.log(JSON.stringify({type:'result', is_error:false, result:'ok', usage:{input_tokens:1, output_tokens:1}}));
+    `); chmodSync(executable, 0o755);
+    await collect(new ClaudeCodePhaseRunner(executable), request("orchestration-auto", "Use aster_delegate_start_mutating", "auto"));
+    const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
+    expect(args).toEqual(expect.arrayContaining([
+      "--allowedTools",
+      "mcp__law-ollama__aster_list_models,mcp__law-ollama__aster_delegate_start,mcp__law-ollama__aster_delegate_get,mcp__law-ollama__aster_delegate_start_mutating",
+    ]));
   });
 });

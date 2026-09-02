@@ -31,10 +31,11 @@ import { EvidenceService } from "./evidence/evidence-service.js";
 import { UpdateService, MigrationService, PluginService, AboutService } from "./system/system-service.js";
 import { DESKTOP_VERSION, DATA_SCHEMA_VERSION } from "@law/contracts";
 import { defaultPolicy } from "./ports.js";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AttachmentService } from "./attachment/attachment-service.js";
+import { McpRegistryService } from "./mcp/mcp-registry-service.js";
 
 async function main(): Promise<void> {
   const lawRoot = findLawRoot();
@@ -48,6 +49,7 @@ async function main(): Promise<void> {
   );
   const authModule = await import(pathToFileURL(join(lawRoot, "dist", "pi-adapter", "index.js")).href) as { PiAuthBroker: new (custom?: () => unknown[]) => any };
   const auth = new authModule.PiAuthBroker(customProviders);
+  const mcp = McpRegistryService.forRoot(dataRoot);
   const providers = new ProviderService({
     store: connectionStore,
     broker: new CredentialBroker({ runner: new SpawnCommandRunner() }),
@@ -60,7 +62,7 @@ async function main(): Promise<void> {
     piRunner,
     new GeminiCliPhaseRunner(geminiCli.cliPath),
     new AntigravityPhaseRunner(geminiCli.antigravityPath),
-    new ClaudeCodePhaseRunner(),
+    new ClaudeCodePhaseRunner(undefined, mcp.claudeConfigPath, () => mcp.environment()),
   );
   const attachments = new AttachmentService(dataRoot);
   const orchestrator = new Orchestrator({
@@ -69,6 +71,7 @@ async function main(): Promise<void> {
     netState: () => ({ offlineLocalOnly: defaultPolicy.offlineLocalOnly(), remoteAuthorized: false }),
     workspaceRootFor: (task) => (task.workspaceId && task.workspaceId.startsWith("/") ? task.workspaceId : lawRoot),
     attachments,
+    orchestrationGuide: loadOrchestrationGuide(lawRoot),
   });
   const editor = new EditorService({ workspaceRoot: lawRoot, fs: nodeFs });
   const autocomplete = new AutocompleteService();
@@ -100,7 +103,7 @@ async function main(): Promise<void> {
     () => ["Windows/macOS deferred (OPEN-D-002)", "Packaging and UAT run on Ubuntu 24.04 (AS-D-001)", "Local models require a loopback endpoint (e.g. Ollama)"],
     () => ["final visual baseline", "live provider login/paid use", "license/trademark review", "release signing and publication"],
   );
-  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about, attachments });
+  const daemon = new Daemon({ probe: new LawCoreProbe(lawRoot), catalog, providers, auth, geminiCliStatus: () => geminiCli.status(), orchestrator, editor, autocomplete, git, logging, evidence, update, migration, plugins, about, attachments, mcp });
   const info = await daemon.start();
 
   // Structured, secret-free startup line (token is NEVER logged).
@@ -119,6 +122,13 @@ async function main(): Promise<void> {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function loadOrchestrationGuide(lawRoot: string): string | undefined {
+  const path = join(lawRoot, "skills", "orchestrate-aster-models", "SKILL.md");
+  if (!existsSync(path)) return undefined;
+  const contents = readFileSync(path, "utf8");
+  return contents.replace(/^---[\s\S]*?---\s*/, "").trim();
 }
 
 main().catch((err) => {

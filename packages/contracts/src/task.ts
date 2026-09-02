@@ -87,6 +87,8 @@ export const Task = z.object({
   workspaceId: z.string().optional(),
   /** Default identity applied to a new phase when the message doesn't specify one. */
   defaultIdentity: PhaseIdentity.optional(),
+  /** Private transcript seed used only for the first turn of a rewind branch. */
+  contextSeed: z.string().optional(),
 });
 export type Task = z.infer<typeof Task>;
 
@@ -195,4 +197,31 @@ export const task_delete = defineOperation({
   consequential: true,
   request: z.object({ taskId: z.string().min(1) }),
   response: z.object({ deleted: z.boolean() }),
+});
+
+export const task_rewind = defineOperation({
+  name: "task_rewind",
+  schemaVersion: 1,
+  summary: "Branch a chat immediately before one user message and return that message as an editable draft.",
+  consequential: true,
+  request: z.object({ taskId: z.string().min(1), userSeq: z.number().int().nonnegative() }),
+  response: z.object({ task: Task, events: z.array(ChatEvent), draft: z.string() }),
+});
+
+export const UsageSummary = z.object({
+  measuredSince: z.string().optional(),
+  providers: z.array(z.object({
+    provider: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative(),
+    models: z.array(z.object({ model: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative() })),
+  })),
+});
+export type UsageSummary = z.infer<typeof UsageSummary>;
+
+export const usage_get_summary = defineOperation({
+  name: "usage_get_summary",
+  schemaVersion: 1,
+  summary: "Return locally observed token usage grouped by provider and model.",
+  consequential: false,
+  request: z.object({}),
+  response: UsageSummary,
 });

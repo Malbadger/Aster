@@ -11,6 +11,8 @@ function memFs(init: Record<string, string> = {}): FsPort {
     },
     write: (p, c) => void map.set(p, c),
     exists: (p) => map.has(p),
+    list: (p) => [...map.keys()].filter((key) => key.startsWith(`${p}/`) && !key.slice(p.length + 1).includes("/"))
+      .map((key) => ({ name: key.slice(p.length + 1), kind: "file" as const })),
   };
 }
 
@@ -39,6 +41,20 @@ describe("EditorService verification staleness (RULE-D-004)", () => {
     const fs = memFs({ [`${ROOT}/b.json`]: "{}" });
     const svc = new EditorService({ workspaceRoot: ROOT, fs });
     expect(svc.status("b.json").state.verification).toBe("unverified");
+  });
+
+  it("lists workspace children in directory-first natural order", () => {
+    const fs: FsPort = {
+      ...memFs({ [`${ROOT}/file10.ts`]: "", [`${ROOT}/file2.ts`]: "" }),
+      exists: () => true,
+      list: () => [
+        { name: "file10.ts", kind: "file" },
+        { name: "src", kind: "directory" },
+        { name: "file2.ts", kind: "file" },
+      ],
+    };
+    expect(new EditorService({ workspaceRoot: ROOT, fs }).listDirectory(ROOT).entries.map((entry) => entry.name))
+      .toEqual(["src", "file2.ts", "file10.ts"]);
   });
 
   it("records mixed provenance when model and human both edit", () => {

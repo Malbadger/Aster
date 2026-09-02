@@ -13,6 +13,7 @@ export interface FsPort {
   read(path: string): string;
   write(path: string, content: string): void;
   exists(path: string): boolean;
+  list(path: string): Array<{ name: string; kind: "file" | "directory" | "symlink" }>;
 }
 
 /** Required-checks runner for a file's content. Deterministic in tests. */
@@ -93,6 +94,21 @@ export class EditorService {
     if (t.contentHash !== hash) t.contentHash = hash; // external change resets nothing but the hash
     this.tracked.set(abs, t);
     return { path, content, state: this.stateFor(path, t) };
+  }
+
+  listDirectory(path: string): { path: string; entries: Array<{ name: string; path: string; kind: "file" | "directory" | "symlink" }> } {
+    const abs = this.contain(path);
+    if (!this.deps.fs.exists(abs)) {
+      throw Object.assign(new Error(`no such directory: ${path}`), { code: "NOT_FOUND" });
+    }
+    const entries = this.deps.fs.list(abs)
+      .map((entry) => ({ ...entry, path: resolve(abs, entry.name) }))
+      .sort((left, right) => {
+        if (left.kind === "directory" && right.kind !== "directory") return -1;
+        if (left.kind !== "directory" && right.kind === "directory") return 1;
+        return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" });
+      });
+    return { path: abs, entries };
   }
 
   writeFile(path: string, content: string, author: "human" | "model" | "formatter"): { state: FileState } {

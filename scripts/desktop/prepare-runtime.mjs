@@ -12,6 +12,7 @@ cpSync(process.execPath, join(out, "node"));
 chmodSync(join(out, "node"), 0o755);
 cpSync(join(root, "dist"), join(out, "app/dist"), { recursive: true });
 cpSync(join(root, "apps/lawd/dist"), join(out, "app/apps/lawd/dist"), { recursive: true });
+cpSync(join(root, "skills"), join(out, "app/skills"), { recursive: true });
 const rootPackage = JSON.parse(await (await import("node:fs/promises")).readFile(join(root, "package.json"), "utf8"));
 writeFileSync(join(out, "app/package.json"), JSON.stringify({
   name: "law-runtime",

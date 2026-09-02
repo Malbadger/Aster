@@ -71,7 +71,7 @@ function fakeOrchestrator() {
 
 const memFs: FsPort = (() => {
   const map = new Map<string, string>();
-  return { read: (p) => map.get(p) ?? "", write: (p, c) => void map.set(p, c), exists: (p) => map.has(p) };
+  return { read: (p) => map.get(p) ?? "", write: (p, c) => void map.set(p, c), exists: (p) => map.has(p), list: () => [] };
 })();
 
 function fakeEditor() {

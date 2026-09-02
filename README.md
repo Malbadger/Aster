@@ -100,9 +100,25 @@ Use my selected local model to inspect this project. Then use Claude to audit
 the proposed changes. Summarize the audit and run the local checks.
 ```
 
-Only configured, available providers can run. Aster displays interpreted phases
-and results chronologically. Prompt text cannot grant extra filesystem,
-command, network, or credential permissions.
+Name exact provider-qualified models when the choice matters. Aster ships the
+`orchestrate-aster-models` skill and exposes provider-neutral delegation tools
+through its local MCP server. A coordinating model lists Aster's available
+models, starts a bounded delegated task, and polls its result. It must not search
+for vendor SDKs, invent an `openai.py` client, read credentials, or silently
+substitute another model.
+
+Read-only delegation is available in Plan mode. Delegated workspace changes
+require the coordinating phase to be in Auto or Full access; Aster does not let
+a model bypass the mode selected by the user.
+
+Every response carries a compact provider/model badge. Tool calls, commands,
+results, and permission denials are grouped into collapsed **Tools** disclosures.
+Press **↑** in the composer to recall earlier prompts. Hover a prior user
+message and choose **Rewind** to create a safe branch before that message; the
+original chat remains intact and the old prompt becomes editable.
+
+Only configured, available providers can run. Prompt text cannot grant extra
+filesystem, command, network, or credential permissions.
 
 ### Attach files to chat
 
@@ -150,6 +166,10 @@ process may not.
 Open **Settings → Providers** to connect an account, enter an API key, or add a
 compatible endpoint. Aster keeps every discovered model in the same selector;
 provider names are metadata, not selectable pseudo-models.
+
+Open **Settings → Usage** for locally measured input, output, and total tokens
+grouped by provider and model. It reports only usage emitted to Aster in retained
+chats; it does not estimate subscription balances or plan limits.
 
 - **Claude** chat phases pass through the user's official Claude Code CLI. The
   bridge is invisible in chat; replies carry a **Claude Code** badge and the
@@ -239,6 +259,26 @@ law --help
 Aster includes a local stdio MCP server for delegating bounded read-only work to
 Ollama without sending model weights, checkpoints, or full local transcripts to
 the client conversation.
+
+### MCP Hub
+
+Open **Settings → MCP Hub** to add local stdio servers or remote MCP HTTP URLs.
+You can use the visual form, paste a standard `{"mcpServers": {...}}` object, or
+choose a JSON file. Aster validates every definition, lets you test/discover its
+tools, and provides enable, disable, and remove controls. The editable local
+configuration path is shown on that page.
+
+Do not place credential values in MCP JSON. Reference an environment variable,
+for example `"GITHUB_TOKEN": "${GITHUB_TOKEN}"`; Aster resolves it at launch
+without copying the value into its generated model configuration. Enabled
+servers are supplied to supported bridges such as the transparent Claude Code
+runner. Any conforming server is accepted—official SDK, FastMCP, or otherwise.
+
+The 2026-07-28 MCP protocol made transport stateless. Aster therefore treats
+server/task identifiers as explicit application handles rather than relying on
+hidden transport sessions. A migration from the legacy TypeScript SDK line to
+the official v2 SDK is tracked separately so existing integrations remain
+compatible during the transition.
 
 Build it first:
 

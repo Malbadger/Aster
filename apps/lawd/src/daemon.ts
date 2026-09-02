@@ -28,6 +28,9 @@ import {
   task_cancel,
   task_respond_approval,
   task_delete,
+  task_rewind,
+  usage_get_summary,
+  fs_list_directory,
   fs_read_file,
   fs_write_file,
   verify_run,
@@ -53,6 +56,12 @@ import {
   workspace_set_root,
   attachment_import,
   attachment_stage,
+  mcp_server_list,
+  mcp_server_upsert,
+  mcp_server_import,
+  mcp_server_set_enabled,
+  mcp_server_remove,
+  mcp_server_test,
   type EffortLevel,
   type AddConnectionInput,
   type PhaseIdentity,
@@ -74,6 +83,7 @@ import type { GitService } from "./git/git-service.js";
 import type { LoggingService } from "./logging/logging-service.js";
 import type { EvidenceService } from "./evidence/evidence-service.js";
 import type { AttachmentService } from "./attachment/attachment-service.js";
+import type { McpRegistryService } from "./mcp/mcp-registry-service.js";
 import type { UpdateService, MigrationService, PluginService, AboutService } from "./system/system-service.js";
 import { PROTOCOL_VERSION } from "@law/contracts";
 import { existsSync, statSync } from "node:fs";
@@ -96,6 +106,7 @@ export interface DaemonOptions {
   plugins: PluginService;
   about: AboutService;
   attachments?: AttachmentService;
+  mcp?: McpRegistryService;
   pluginManifests?: PluginManifest[];
   policy?: PolicyPort;
   clock?: Clock;
@@ -124,6 +135,7 @@ export class Daemon {
   private readonly plugins: PluginService;
   private readonly about: AboutService;
   private readonly attachments: Pick<AttachmentService, "importPath" | "stageBase64">;
+  private readonly mcp?: McpRegistryService;
   private readonly pluginManifests: PluginManifest[];
   private readonly policy: PolicyPort;
   private readonly clock: Clock;
@@ -136,6 +148,7 @@ export class Daemon {
     this.auth = opts.auth ?? { methods: async () => [], start: async () => { throw new Error("Pi authentication unavailable"); }, get: () => { throw new Error("Pi authentication unavailable"); }, respond: () => false, cancel: () => false, logout: async () => false };
     this.geminiCliStatus = opts.geminiCliStatus ?? (async () => ({ installed: false, configured: false }));
     this.orchestrator = opts.orchestrator;
+    this.mcp = opts.mcp;
     this.editor = opts.editor;
     this.autocomplete = opts.autocomplete;
     this.git = opts.git;
@@ -239,6 +252,11 @@ export class Daemon {
       const { taskId } = payload as { taskId: string };
       return this.orchestrator.deleteTask(taskId);
     });
+    this.dispatcher.handle(task_rewind.name, (payload) => {
+      const { taskId, userSeq } = payload as { taskId: string; userSeq: number };
+      return this.orchestrator.rewindTask(taskId, userSeq);
+    });
+    this.dispatcher.handle(usage_get_summary.name, () => this.orchestrator.usageSummary());
 
     this.dispatcher.handle(attachment_import.name, (payload) => this.attachments.importPath((payload as { path: string }).path));
     this.dispatcher.handle(attachment_stage.name, (payload) => {
@@ -246,6 +264,20 @@ export class Daemon {
       return this.attachments.stageBase64(name, mimeType, dataBase64);
     });
 
+    this.dispatcher.handle(mcp_server_list.name, () => this.requireMcp().list());
+    this.dispatcher.handle(mcp_server_upsert.name, (payload) => this.requireMcp().upsert(payload));
+    this.dispatcher.handle(mcp_server_import.name, (payload) => this.requireMcp().importJson((payload as { json: string }).json));
+    this.dispatcher.handle(mcp_server_set_enabled.name, (payload) => {
+      const { id, enabled } = payload as { id: string; enabled: boolean };
+      return this.requireMcp().setEnabled(id, enabled);
+    });
+    this.dispatcher.handle(mcp_server_remove.name, (payload) => this.requireMcp().remove((payload as { id: string }).id));
+    this.dispatcher.handle(mcp_server_test.name, (payload) => this.requireMcp().test((payload as { id: string }).id));
+
+    this.dispatcher.handle(fs_list_directory.name, (payload) => {
+      const { path } = payload as { path: string };
+      return this.editor.listDirectory(path);
+    });
     this.dispatcher.handle(fs_read_file.name, (payload) => {
       const { path } = payload as { path: string };
       return this.editor.readFile(path);
@@ -304,6 +336,11 @@ export class Daemon {
       this.workspaceRoot = path;
       return { path };
     });
+  }
+
+  private requireMcp(): McpRegistryService {
+    if (!this.mcp) throw Object.assign(new Error("MCP Hub is unavailable"), { code: "UNAVAILABLE" });
+    return this.mcp;
   }
 
   /** Operations declared in contracts but not yet handled. Drives the census. */

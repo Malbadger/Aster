@@ -145,8 +145,29 @@ fn vscodium_theme_id(theme: Option<&str>) -> &'static str {
     }
 }
 
-fn themed_vscodium_url(url: &str, theme: Option<&str>) -> String {
-    format!("{}?lawTheme={}", url.trim_end_matches('/'), vscodium_theme_id(theme))
+fn encode_query_component(value: &str) -> String {
+    value.as_bytes().iter().map(|byte| match byte {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (*byte as char).to_string(),
+        _ => format!("%{byte:02X}"),
+    }).collect()
+}
+
+fn file_uri(path: &Path) -> String {
+    let encoded: String = path.to_string_lossy().as_bytes().iter().map(|byte| match byte {
+        b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => (*byte as char).to_string(),
+        _ => format!("%{byte:02X}"),
+    }).collect();
+    format!("file://{encoded}")
+}
+
+fn themed_vscodium_url(url: &str, theme: Option<&str>, file_path: Option<&Path>) -> String {
+    let mut result = format!("{}?lawTheme={}", url.trim_end_matches('/'), vscodium_theme_id(theme));
+    if let Some(path) = file_path {
+        let payload = serde_json::json!([["openFile", file_uri(path)]]).to_string();
+        result.push_str("&payload=");
+        result.push_str(&encode_query_component(&payload));
+    }
+    result
 }
 
 fn spawn_vscodium_theme_proxy(app: &tauri::AppHandle, upstream: &str) -> Result<(std::process::Child, String), String> {
@@ -369,13 +390,24 @@ fn editor_open(engine: String, file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>, theme: Option<String>) -> Result<String, String> {
-    ensure_vscodium(&app, &state, directory, theme)
+fn vscodium_start(app: tauri::AppHandle, state: State<'_, VscodiumState>, directory: Option<String>, file_path: Option<String>, theme: Option<String>) -> Result<String, String> {
+    ensure_vscodium(&app, &state, directory, file_path, theme)
 }
 
-fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Option<String>, theme: Option<String>) -> Result<String, String> {
+fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Option<String>, file_path: Option<String>, theme: Option<String>) -> Result<String, String> {
     let mut slot = state.0.lock().map_err(|_| "VSCodium state is unavailable".to_string())?;
     let folder = safe_directory(directory).ok_or_else(|| "Could not determine a VSCodium workspace".to_string())?;
+    let canonical_folder = std::fs::canonicalize(&folder).map_err(|error| format!("Could not resolve VSCodium workspace: {error}"))?;
+    let selected_file = match file_path {
+        Some(path) => {
+            let canonical = std::fs::canonicalize(&path).map_err(|error| format!("Could not resolve selected file: {error}"))?;
+            if !canonical.starts_with(&canonical_folder) || !canonical.is_file() {
+                return Err("Selected editor file must be a regular file inside the workspace".into());
+            }
+            Some(canonical)
+        }
+        None => None,
+    };
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
     let program = find_vscodium_tunnel().ok_or_else(|| "Could not find the VSCodium server executable (codium-tunnel)".to_string())?;
@@ -384,7 +416,7 @@ fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Opt
         let editor_running = server.child.try_wait().map_err(|error| error.to_string())?.is_none();
         let proxy_running = server.theme_proxy.try_wait().map_err(|error| error.to_string())?.is_none();
         if editor_running && proxy_running && server.folder == folder {
-            return Ok(themed_vscodium_url(&server.url, theme.as_deref()));
+            return Ok(themed_vscodium_url(&server.url, theme.as_deref(), selected_file.as_deref()));
         }
         terminate_process_group(&mut server.theme_proxy);
         terminate_process_group(&mut server.child);
@@ -419,7 +451,7 @@ fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Opt
                 Ok(url) => match wait_for_vscodium_http(&url, std::time::Duration::from_secs(20)) {
                     Ok(()) => match spawn_vscodium_theme_proxy(app, &url) {
                         Ok((theme_proxy, proxy_url)) => {
-                            let themed_url = themed_vscodium_url(&proxy_url, theme.as_deref());
+                            let themed_url = themed_vscodium_url(&proxy_url, theme.as_deref(), selected_file.as_deref());
                             *slot = Some(VscodiumServer { child, theme_proxy, url: proxy_url, folder: folder.clone() });
                             return Ok(themed_url);
                         }
@@ -527,7 +559,7 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn_blocking(move || {
                 let state = handle.state::<VscodiumState>();
-                let _ = ensure_vscodium(&handle, &state, None, Some("graphite".into()));
+                let _ = ensure_vscodium(&handle, &state, None, None, Some("graphite".into()));
             });
             Ok(())
         })

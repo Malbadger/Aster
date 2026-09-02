@@ -1,13 +1,14 @@
 import React from "react";
-import type { ProviderConnection } from "@law/contracts";
+import type { McpServerConfig, McpServerView, ProviderConnection, UsageSummary } from "@law/contracts";
 import { ProviderConnections, type AddConnectionForm, type GeminiCliStatusView } from "./ProviderConnections.js";
 import type { AuthProvider } from "./AuthCard.js";
+import { McpHub } from "./McpHub.js";
 
 export type LawTheme = "graphite" | "light" | "midnight" | "high-contrast"
   | "dracula" | "one-dark-pro" | "monokai" | "solarized-dark" | "solarized-light"
   | "nord" | "gruvbox-dark" | "github-dark" | "github-light" | "tokyo-night"
   | "night-owl" | "catppuccin-mocha" | "synthwave-84" | "atom-one-light";
-export type SettingsTab = "appearance" | "providers" | "about";
+export type SettingsTab = "appearance" | "providers" | "mcp" | "usage" | "about";
 export type EditorEngine = "vscode-oss";
 
 export interface SettingsPanelProps {
@@ -18,6 +19,11 @@ export interface SettingsPanelProps {
   providerError?: string;
   authProviders: AuthProvider[];
   geminiCli?: GeminiCliStatusView;
+  usage?: UsageSummary;
+  mcpServers: McpServerView[];
+  mcpConfigPath?: string;
+  mcpBusyId?: string;
+  mcpError?: string;
   onTab: (tab: SettingsTab) => void;
   onTheme: (theme: LawTheme) => void;
   editorEngine: EditorEngine;
@@ -30,6 +36,11 @@ export interface SettingsPanelProps {
   onAuthenticate: (provider: string, method: "oauth" | "api_key") => void;
   onGeminiCliLogin?: () => void;
   onClaudeCodeLogin?: () => void;
+  onMcpUpsert: (server: McpServerConfig) => void;
+  onMcpImport: (json: string) => void;
+  onMcpSetEnabled: (id: string, enabled: boolean) => void;
+  onMcpTest: (id: string) => void;
+  onMcpRemove: (id: string) => void;
 }
 
 const THEMES: Array<{ id: LawTheme; name: string; description: string; colors: string[] }> = [
@@ -59,7 +70,7 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
       <header><div><span className="empty-kicker">Aster</span><h1>Settings</h1></div><button type="button" aria-label="Close settings" onClick={props.onClose}>×</button></header>
       <div className="settings-body">
         <nav aria-label="Settings sections">
-          {(["appearance", "providers", "about"] as SettingsTab[]).map((tab) => <button key={tab} type="button" className={props.tab === tab ? "active" : ""} onClick={() => props.onTab(tab)}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
+          {(["appearance", "providers", "mcp", "usage", "about"] as SettingsTab[]).map((tab) => <button key={tab} type="button" className={props.tab === tab ? "active" : ""} onClick={() => props.onTab(tab)}>{tab === "mcp" ? "MCP Hub" : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>)}
         </nav>
         <main>
           {props.tab === "appearance" && <section><h2>Color theme</h2><p>Choose a workspace palette. Aster and its embedded VSCodium editor stay synchronized, and the selection is stored only on this device.</p><div className="theme-grid">
@@ -69,9 +80,33 @@ export function SettingsPanel(props: SettingsPanelProps): React.JSX.Element {
           </div></section>}
           {props.tab === "providers" && <ProviderConnections connections={props.connections} state={props.providerState} errorMessage={props.providerError}
             authProviders={props.authProviders} geminiCli={props.geminiCli} onAdd={props.onAddConnection} onRemove={props.onRemoveConnection} onSetEnabled={props.onSetConnectionEnabled} onCheck={props.onCheckConnection} onAuthenticate={props.onAuthenticate} onGeminiCliLogin={props.onGeminiCliLogin} onClaudeCodeLogin={props.onClaudeCodeLogin} />}
+          {props.tab === "mcp" && <McpHub servers={props.mcpServers} configPath={props.mcpConfigPath} busyId={props.mcpBusyId} error={props.mcpError}
+            onUpsert={props.onMcpUpsert} onImport={props.onMcpImport} onSetEnabled={props.onMcpSetEnabled} onTest={props.onMcpTest} onRemove={props.onMcpRemove} />}
+          {props.tab === "usage" && <UsagePanel usage={props.usage} />}
           {props.tab === "about" && <section><h2>About Aster</h2><p>Local Agent Workbench is a provider-neutral desktop environment for Pi, local models, and connected model accounts.</p><div className="settings-row"><div><strong>Code editor</strong><p>Aster embeds the open-source VSCodium workbench and synchronizes its palette with the application.</p></div><span>VSCodium</span></div><div className="settings-row"><div><strong>Workspace layout</strong><p>Pane visibility and your resized dimensions are remembered only on this device.</p></div><span>Local</span></div><div className="settings-row"><div><strong>Offline operation</strong><p>Local Ollama models remain available without signing in to a remote provider.</p></div><span>Supported</span></div></section>}
         </main>
       </div>
     </section>
   </div>;
+}
+
+function UsagePanel({ usage }: { usage?: UsageSummary }): React.JSX.Element {
+  return <section className="usage-panel"><h2>Token usage</h2><p>Tokens observed by Aster in locally retained chats. Provider plan limits are not estimated.</p>
+    {usage?.measuredSince && <small className="usage-since">Measured since {new Date(usage.measuredSince).toLocaleDateString()}</small>}
+    {!usage?.providers.length ? <div className="settings-empty"><strong>No measured usage yet</strong><span>Provider totals appear after a model reports token usage.</span></div> : <div className="usage-provider-list">{usage.providers.map((provider) => <article className="usage-provider" key={provider.provider}>
+      <header><div><span>{providerName(provider.provider)}</span><strong>{formatTokens(provider.total)}</strong></div><small>{formatTokens(provider.input)} in · {formatTokens(provider.output)} out</small></header>
+      <div>{provider.models.map((model) => <div className="usage-model" key={model.model}><span>{model.model}</span><b>{formatTokens(model.total)}</b><small>{formatTokens(model.input)} in · {formatTokens(model.output)} out</small></div>)}</div>
+    </article>)}</div>}
+  </section>;
+}
+
+function formatTokens(value: number): string {
+  if (value < 1_000) return `${value} tokens`;
+  if (value < 1_000_000) return `${(value / 1_000).toFixed(value < 10_000 ? 1 : 0)}K tokens`;
+  return `${(value / 1_000_000).toFixed(2)}M tokens`;
+}
+
+function providerName(provider: string): string {
+  const known: Record<string, string> = { anthropic: "Claude Code", "openai-codex": "OpenAI", ollama: "Ollama", "ollama-local": "Ollama", "gemini-cli": "Gemini CLI", antigravity: "Antigravity" };
+  return known[provider] ?? provider.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

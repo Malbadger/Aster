@@ -14,6 +14,7 @@ export interface ChatPanelProps {
   onBeforeSend?: () => boolean | Promise<boolean>;
   onStop: () => void;
   onRespondApproval?: (approvalId: string, approved: boolean) => void;
+  onRewind?: (event: ChatEvent) => Promise<string | undefined>;
   controls?: React.ReactNode;
   interactive?: React.ReactNode;
   composerNotice?: React.ReactNode;
@@ -53,6 +54,8 @@ function eventIdentity(event: ChatEvent, phases: Map<string, { provider: string;
 
 export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
   const [text, setText] = React.useState("");
+  const [historyIndex, setHistoryIndex] = React.useState<number | undefined>();
+  const draftBeforeHistory = React.useRef("");
   const [submitting, setSubmitting] = React.useState(false);
   const [dragging, setDragging] = React.useState(false);
   const phaseIdentities = new Map<string, { provider: string; model: string }>();
@@ -71,6 +74,8 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
     const previous = conversationalEvents[index - 1];
     return !(previous?.kind === "user" && Boolean(event.text) && previous.text?.trim() === event.text?.trim());
   });
+  const blocks = conversationBlocks(visibleEvents);
+  const promptHistory = visibleEvents.filter((event) => event.kind === "user" && event.text?.trim()).map((event) => event.text!.trim());
   const resolvedApprovals = new Set(props.events.filter((event) => event.kind === "status" && typeof event.data?.approvalId === "string").map((event) => String(event.data?.approvalId)));
   const submit = async () => {
     const t = text.trim() || ((props.attachments?.length ?? 0) > 0 ? "Review the attached files." : "");
@@ -78,7 +83,7 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
     setSubmitting(true);
     try {
       if (props.onBeforeSend && !(await props.onBeforeSend())) return;
-      props.onSend(t); setText("");
+      props.onSend(t); setText(""); setHistoryIndex(undefined); draftBeforeHistory.current = "";
     } finally { setSubmitting(false); }
   };
 
@@ -93,20 +98,23 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
         {visibleEvents.length === 0 && (
           <li className="chat-welcome"><strong>What are we building?</strong><span>Describe a task, open a project, or type /help.</span></li>
         )}
-        {visibleEvents.map((e) => {
+        {blocks.map((block) => {
+          if (block.kind === "tools") return <ToolActivity key={block.id} events={block.events} />;
+          const e = block.event;
           const identity = e.kind === "assistant" ? eventIdentity(e, phaseIdentities) : undefined;
           return <li key={e.id} data-kind={e.kind} className={e.kind === "user" ? "chat-event user" : "chat-event"}>
             <span className="chat-event-mark" style={{ color: eventColor(e.kind) }} aria-hidden>{e.kind === "user" ? "›" : e.kind === "assistant" ? "Aster" : KIND_LABEL[e.kind] ?? e.kind}</span>
             <span className="chat-event-copy">
               {e.kind === "tool_denied" ? <details className="blocked-diagnostic"><summary>Aster blocked one background action</summary><span>{e.text}</span></details> : e.text}
-              {identity && (identity.provider === "anthropic"
-                ? <small className="model-attribution claude-code-attribution" title={`Official Claude Code · ${identity.model}`}><b>Claude Code</b><span>{identity.model}</span></small>
-                : <small className="model-attribution" title={`Provider: ${identity.provider}`}>{identity.model}</small>)}
+              {identity && <small className="model-attribution" title={`${providerLabel(identity.provider)} · ${identity.model}`}><b>{providerLabel(identity.provider)}</b><span>{identity.model}</span></small>}
               {eventAttachments(e).length > 0 && <span className="event-attachments">{eventAttachments(e).map((attachment) => <small key={attachment.attachmentId}>{kindMark(attachment.kind)} {attachment.name}</small>)}</span>}
               {e.kind === "approval" && typeof e.data?.approvalId === "string" && !resolvedApprovals.has(e.data.approvalId) && <span className="approval-actions">
                 <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), true)}>Approve</button>
                 <button type="button" onClick={() => props.onRespondApproval?.(String(e.data?.approvalId), false)}>Deny</button>
               </span>}
+              {e.kind === "user" && props.onRewind && <button type="button" className="rewind-message" title="Branch from this prompt" aria-label={`Rewind to prompt: ${e.text ?? "message"}`} onClick={() => void props.onRewind!(e).then((draft) => {
+                if (draft !== undefined) { setText(draft); setHistoryIndex(undefined); draftBeforeHistory.current = ""; }
+              })}>↶ <span>Rewind</span></button>}
             </span>
           </li>;
         })}
@@ -129,9 +137,29 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
             aria-label="Message"
             autoFocus
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => { setText(e.target.value); setHistoryIndex(undefined); }}
             onPaste={(event) => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); props.onFiles?.(files); } }}
             onKeyDown={(e) => {
+              if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+                const target = e.currentTarget;
+                const onFirstLine = target.selectionStart <= Math.max(0, text.indexOf("\n"));
+                const onLastLine = text.indexOf("\n", target.selectionEnd) === -1;
+                if (e.key === "ArrowUp" && promptHistory.length && (historyIndex !== undefined || onFirstLine)) {
+                  e.preventDefault();
+                  if (historyIndex === undefined) draftBeforeHistory.current = text;
+                  const next = historyIndex === undefined ? promptHistory.length - 1 : Math.max(0, historyIndex - 1);
+                  setHistoryIndex(next); setText(promptHistory[next]!);
+                  requestAnimationFrame(() => target.setSelectionRange(promptHistory[next]!.length, promptHistory[next]!.length));
+                  return;
+                }
+                if (e.key === "ArrowDown" && historyIndex !== undefined && onLastLine) {
+                  e.preventDefault();
+                  const next = historyIndex + 1;
+                  if (next >= promptHistory.length) { setHistoryIndex(undefined); setText(draftBeforeHistory.current); }
+                  else { setHistoryIndex(next); setText(promptHistory[next]!); }
+                  return;
+                }
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void submit();
@@ -150,6 +178,75 @@ export function ChatPanel(props: ChatPanelProps): React.JSX.Element {
       </div>
     </section>
   );
+}
+
+type ConversationBlock = { kind: "event"; event: ChatEvent } | { kind: "tools"; id: string; events: ChatEvent[] };
+
+function conversationBlocks(events: ChatEvent[]): ConversationBlock[] {
+  const blocks: ConversationBlock[] = [];
+  for (const event of events) {
+    if (["tool_call", "tool_result", "tool_denied"].includes(event.kind)) {
+      const last = blocks.at(-1);
+      if (last?.kind === "tools") last.events.push(event);
+      else blocks.push({ kind: "tools", id: `tools-${event.id}`, events: [event] });
+    } else blocks.push({ kind: "event", event });
+  }
+  return blocks;
+}
+
+function ToolActivity({ events }: { events: ChatEvent[] }): React.JSX.Element {
+  const calls = events.filter((event) => event.kind === "tool_call");
+  const actionCount = calls.length || events.length;
+  const attention = events.filter((event) => event.kind === "tool_denied" || (event.kind === "tool_result" && event.data?.ok === false)).length;
+  const names = [...new Set(calls.map((event) => String(event.data?.tool ?? event.text ?? "Tool")))];
+  return <li className="tool-activity">
+    <details>
+      <summary><span className="tool-activity-chevron" aria-hidden>›</span><b>Tools</b><span>{actionCount} {actionCount === 1 ? "action" : "actions"}</span><small>{names.slice(0, 3).join(", ")}{names.length > 3 ? ` +${names.length - 3}` : ""}</small>{attention > 0 && <em>{attention} need attention</em>}</summary>
+      <div className="tool-activity-list">{toolSteps(events).map((step, index) => {
+        const tool = String(step.call?.data?.tool ?? step.call?.text ?? step.outcome?.data?.tool ?? "Tool");
+        const denied = step.outcome?.kind === "tool_denied" || step.outcome?.data?.ok === false;
+        return <details className={`tool-step${denied ? " denied" : ""}`} key={`${step.call?.id ?? step.outcome?.id ?? index}`}>
+          <summary><b>{tool}</b><span>{denied ? "Permission needed" : step.outcome ? "Complete" : "Requested"}</span></summary>
+          {step.call?.data?.input !== undefined && <pre><code>{formatToolValue(step.call.data.input)}</code></pre>}
+          {step.outcome?.text && <div className="tool-step-result"><span>{step.outcome.kind === "tool_denied" ? "Guard" : "Result"}</span><pre><code>{step.outcome.text}</code></pre></div>}
+        </details>;
+      })}</div>
+    </details>
+  </li>;
+}
+
+function toolSteps(events: ChatEvent[]): Array<{ call?: ChatEvent; outcome?: ChatEvent }> {
+  const steps: Array<{ call?: ChatEvent; outcome?: ChatEvent }> = [];
+  const byCall = new Map<string, { call?: ChatEvent; outcome?: ChatEvent }>();
+  for (const event of events) {
+    const callId = typeof event.data?.callId === "string" ? event.data.callId : undefined;
+    if (event.kind === "tool_call") {
+      const step = { call: event };
+      steps.push(step); if (callId) byCall.set(callId, step);
+    } else {
+      const step = callId ? byCall.get(callId) : undefined;
+      if (step && !step.outcome) step.outcome = event;
+      else steps.push({ outcome: event });
+    }
+  }
+  return steps;
+}
+
+function formatToolValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  try { return JSON.stringify(value, null, 2); } catch { return String(value); }
+}
+
+function providerLabel(provider: string): string {
+  const labels: Record<string, string> = {
+    anthropic: "Claude Code",
+    "openai-codex": "OpenAI",
+    ollama: "Ollama",
+    "ollama-local": "Ollama",
+    "gemini-cli": "Gemini CLI",
+    antigravity: "Antigravity",
+  };
+  return labels[provider] ?? provider.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function eventAttachments(event: ChatEvent): AttachmentDescriptor[] {

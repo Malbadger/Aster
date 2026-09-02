@@ -175,4 +175,38 @@ describe("Orchestrator", () => {
     expect(user?.data?.attachments).toEqual([expect.objectContaining({ name: "brief.md", kind: "text" })]);
     expect(JSON.stringify(user?.data)).not.toContain("secret");
   });
+
+  it("rewinds by creating a safe branch and restores the selected prompt", async () => {
+    const { orch } = make(new ScriptedRunner());
+    const original = orch.createTask({ title: "chat", defaultIdentity: IDENTITY }).task;
+    orch.sendMessage({ taskId: original.taskId, text: "first prompt" }); await orch.idle(original.taskId);
+    orch.sendMessage({ taskId: original.taskId, text: "second prompt" }); await orch.idle(original.taskId);
+    const pivot = orch.getEvents(original.taskId, 0).events.find((event) => event.kind === "user" && event.text === "second prompt")!;
+    const branch = orch.rewindTask(original.taskId, pivot.seq);
+    expect(branch.task.taskId).not.toBe(original.taskId);
+    expect(branch.task.title).toContain("rewind");
+    expect(branch.draft).toBe("second prompt");
+    expect(branch.events.some((event) => event.text === "first prompt")).toBe(true);
+    expect(branch.events.some((event) => event.text === "second prompt")).toBe(false);
+    expect(orch.getEvents(original.taskId, 0).events.some((event) => event.text === "second prompt")).toBe(true);
+  });
+
+  it("injects the shipped orchestration guide only for cross-model requests", async () => {
+    let prompt = "";
+    const runner: PhaseRunner = { async *run(req) { prompt = req.prompt; yield { kind: "settled" }; } };
+    const store = new MemoryTaskStore();
+    const orch = new Orchestrator({ store, runner, netState: () => ({ offlineLocalOnly: true, remoteAuthorized: false }), workspaceRootFor: () => "/work/ws", orchestrationGuide: "USE ASTER DELEGATION TOOLS" });
+    const task = orch.createTask({ title: "multi", defaultIdentity: IDENTITY }).task;
+    orch.sendMessage({ taskId: task.taskId, text: "Build with OpenAI then audit with Claude" }); await orch.idle(task.taskId);
+    expect(prompt).toContain("USE ASTER DELEGATION TOOLS");
+    expect(prompt).toContain("Build with OpenAI then audit with Claude");
+  });
+
+  it("aggregates provider and model token usage from retained chats", async () => {
+    const runner: PhaseRunner = { async *run() { yield { kind: "usage", input: 120, output: 30 }; yield { kind: "settled" }; } };
+    const { orch } = make(runner);
+    const task = orch.createTask({ title: "usage", defaultIdentity: IDENTITY }).task;
+    orch.sendMessage({ taskId: task.taskId, text: "measure" }); await orch.idle(task.taskId);
+    expect(orch.usageSummary().providers).toEqual([{ provider: "ollama", input: 120, output: 30, total: 150, models: [{ model: "llama3.1:8b", input: 120, output: 30, total: 150 }] }]);
+  });
 });

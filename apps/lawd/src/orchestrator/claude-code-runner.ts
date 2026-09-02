@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { existsSync } from "node:fs";
 import { promptWithAttachments, type PhaseEvent, type PhaseRunRequest, type PhaseRunner } from "./phase-runner.js";
 
 function sessionUuid(taskId: string): string {
@@ -16,7 +17,11 @@ function sessionUuid(taskId: string): string {
 export class ClaudeCodePhaseRunner implements PhaseRunner {
   private readonly sessions = new Set<string>();
 
-  constructor(private readonly executable = process.env.CLAUDE_CODE_PATH ?? "claude") {}
+  constructor(
+    private readonly executable = process.env.CLAUDE_CODE_PATH ?? "claude",
+    private readonly mcpConfigPath?: string,
+    private readonly mcpEnvironment: () => Record<string, string> = () => ({}),
+  ) {}
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     const selected = req.identity.model.startsWith("anthropic:") ? req.identity.model.slice("anthropic:".length) : req.identity.model;
@@ -28,13 +33,19 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
       "--effort", normalizeEffort(req.identity.effort),
     ];
     if (selected) args.push("--model", selected);
+    if (this.mcpConfigPath && existsSync(this.mcpConfigPath)) args.push("--mcp-config", this.mcpConfigPath);
+    if (/aster_(?:list_models|delegate_start|delegate_get)/i.test(req.prompt)) {
+      const tools = ["mcp__law-ollama__aster_list_models", "mcp__law-ollama__aster_delegate_start", "mcp__law-ollama__aster_delegate_get"];
+      if (req.identity.mode === "auto" || req.identity.mode === "full-access") tools.push("mcp__law-ollama__aster_delegate_start_mutating");
+      args.push("--allowedTools", tools.join(","));
+    }
     if (this.sessions.has(req.taskId)) args.push("--resume", sessionId);
     else args.push("--session-id", sessionId);
     if (req.identity.mode === "full-access") args.push("--dangerously-skip-permissions");
 
     const child = spawn(this.executable, args, {
       cwd: req.workspaceRoot,
-      env: { ...process.env },
+      env: { ...process.env, ...this.mcpEnvironment() },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const exitPromise = new Promise<number | null>((resolve, reject) => {

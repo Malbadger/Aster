@@ -1,0 +1,4 @@
+interface:
+  display_name: "Aster Model Orchestration"
+  short_description: "Delegate work safely across connected Aster models"
+  default_prompt: "Use $orchestrate-aster-models to coordinate this task across my selected models."

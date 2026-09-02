@@ -19,6 +19,7 @@ export * from "./evidence.js";
 export * from "./system.js";
 export * from "./workspace.js";
 export * from "./attachment.js";
+export * from "./mcp.js";
 
 import { ContractRegistry } from "./ipc.js";
 import { daemon_get_health, daemon_probe_capabilities } from "./health.js";
@@ -41,8 +42,11 @@ import {
   task_cancel,
   task_respond_approval,
   task_delete,
+  task_rewind,
+  usage_get_summary,
 } from "./task.js";
 import {
+  fs_list_directory,
   fs_read_file,
   fs_write_file,
   verify_run,
@@ -57,6 +61,7 @@ import { evidence_export } from "./evidence.js";
 import { update_check, update_stage, migration_status, migration_run, plugin_list, about_get } from "./system.js";
 import { workspace_get_root, workspace_set_root } from "./workspace.js";
 import { attachment_import, attachment_stage } from "./attachment.js";
+import { mcp_server_list, mcp_server_upsert, mcp_server_import, mcp_server_set_enabled, mcp_server_remove, mcp_server_test } from "./mcp.js";
 
 /** The canonical registry of all known operations. */
 export function createContractRegistry(): ContractRegistry {
@@ -87,6 +92,9 @@ export function createContractRegistry(): ContractRegistry {
   r.register(task_cancel);
   r.register(task_respond_approval);
   r.register(task_delete);
+  r.register(task_rewind);
+  r.register(usage_get_summary);
+  r.register(fs_list_directory);
   r.register(fs_read_file);
   r.register(fs_write_file);
   r.register(verify_run);
@@ -112,5 +120,11 @@ export function createContractRegistry(): ContractRegistry {
   r.register(workspace_set_root);
   r.register(attachment_import);
   r.register(attachment_stage);
+  r.register(mcp_server_list);
+  r.register(mcp_server_upsert);
+  r.register(mcp_server_import);
+  r.register(mcp_server_set_enabled);
+  r.register(mcp_server_remove);
+  r.register(mcp_server_test);
   return r;
 }

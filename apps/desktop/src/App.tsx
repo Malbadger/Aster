@@ -4,15 +4,17 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
   model_list_catalog, model_set_favorite, task_cancel, task_create,
-  task_get_events, task_list, task_send_message, task_delete, task_respond_approval,
-  fs_read_file, fs_write_file, verify_run,
+  task_get_events, task_list, task_send_message, task_delete, task_rewind, task_respond_approval,
+  usage_get_summary,
+  fs_list_directory, fs_read_file, fs_write_file, verify_run,
   workspace_set_root,
   attachment_import, attachment_stage,
   provider_list_connections, provider_add_connection, provider_remove_connection, provider_set_enabled, provider_check_credential,
   provider_auth_methods, provider_auth_start, provider_auth_get, provider_auth_respond, provider_auth_cancel, provider_auth_logout,
   provider_gemini_cli_status,
+  mcp_server_list, mcp_server_upsert, mcp_server_import, mcp_server_set_enabled, mcp_server_remove, mcp_server_test,
   type CapabilityProbe, type ChatEvent, type EffortLevel, type ExecutionMode,
-  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow, type AttachmentDescriptor,
+  type ModelDescriptor, type PhaseIdentity, type ProviderConnection, type Task, type AuthFlow, type AttachmentDescriptor, type UsageSummary, type McpServerConfig, type McpServerView,
 } from "@law/contracts";
 import { createIpcClient, type IpcClient } from "./ipc/client.js";
 import { tauriTransport } from "./ipc/tauri-transport.js";
@@ -30,6 +32,7 @@ import { WorkspaceShell } from "./components/WorkspaceShell.js";
 import { AuthCard, type AuthProvider } from "./components/AuthCard.js";
 import { GeminiCliLogin } from "./components/GeminiCliLogin.js";
 import { ClaudeCodeLogin } from "./components/ClaudeCodeLogin.js";
+import { FileExplorer } from "./components/FileExplorer.js";
 import type { GeminiCliStatusView } from "./components/ProviderConnections.js";
 import { DEFAULT_LAYOUT, applyPreset, resetLayout, togglePanel, type Layout, type Panel, type Preset } from "./layout/layout.js";
 import asterMark from "./assets/aster-mark-muted-transparent.svg";
@@ -86,6 +89,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [connections, setConnections] = React.useState<ProviderConnection[]>([]);
   const [providerState, setProviderState] = React.useState<"empty" | "loading" | "error" | "ready">("loading");
   const [providerError, setProviderError] = React.useState<string>();
+  const [usage, setUsage] = React.useState<UsageSummary>();
+  const [mcpServers, setMcpServers] = React.useState<McpServerView[]>([]);
+  const [mcpConfigPath, setMcpConfigPath] = React.useState<string>();
+  const [mcpBusyId, setMcpBusyId] = React.useState<string>();
+  const [mcpError, setMcpError] = React.useState<string>();
   const [authProviders, setAuthProviders] = React.useState<AuthProvider[]>([]);
   const [authFlow, setAuthFlow] = React.useState<AuthFlow>();
   const [authOpen, setAuthOpen] = React.useState(false);
@@ -112,6 +120,10 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     setTasks((await client.call(task_list, { query: "" })).tasks);
   }, [client]);
 
+  const listWorkspaceDirectory = React.useCallback(async (path: string) => (
+    await client.call(fs_list_directory, { path })
+  ).entries, [client]);
+
   const refreshProviders = React.useCallback(async () => {
     try {
       setProviderState("loading"); setProviderError(undefined);
@@ -132,6 +144,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     const status = await client.call(provider_gemini_cli_status, {});
     setGeminiCli(status);
     return status;
+  }, [client]);
+
+  const refreshMcp = React.useCallback(async () => {
+    const result = await client.call(mcp_server_list, {});
+    setMcpServers(result.servers); setMcpConfigPath(result.configPath);
+    return result;
   }, [client]);
 
   const boot = React.useCallback(async () => {
@@ -183,6 +201,14 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   }, [authFlow?.flowId, authFlow?.status, query, refreshAuthProviders, refreshCatalog]);
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
   React.useEffect(() => { localStorage.setItem(MODE_KEY, mode); }, [mode]);
+  React.useEffect(() => {
+    if (settingsTab !== "usage") return;
+    void client.call(usage_get_summary, {}).then(setUsage).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, [client, settingsTab]);
+  React.useEffect(() => {
+    if (settingsTab !== "mcp") return;
+    void refreshMcp().catch((cause) => setMcpError(cause instanceof Error ? cause.message : String(cause)));
+  }, [refreshMcp, settingsTab]);
 
   React.useEffect(() => {
     if (!taskId || !running) return;
@@ -454,6 +480,21 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
     await client.call(provider_check_credential, { connectionId }); await refreshProviders();
   }
 
+  async function updateMcp(action: () => Promise<unknown>): Promise<void> {
+    setMcpError(undefined);
+    try { await action(); await refreshMcp(); }
+    catch (cause) { setMcpError(cause instanceof Error ? cause.message : String(cause)); }
+  }
+
+  async function testMcp(id: string): Promise<void> {
+    setMcpBusyId(id); setMcpError(undefined);
+    try {
+      const result = await client.call(mcp_server_test, { id });
+      setMcpServers((current) => current.map((item) => item.server.id === id ? result.server : item));
+    } catch (cause) { setMcpError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setMcpBusyId(undefined); }
+  }
+
   async function deleteChat(id: string): Promise<void> {
     const task = tasks.find((item) => item.taskId === id);
     if (!window.confirm(`Delete “${task?.title ?? "this chat"}” and its local message history? This cannot be undone.`)) return;
@@ -463,6 +504,22 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       await refreshTasks();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  async function rewindChat(event: ChatEvent): Promise<string | undefined> {
+    if (!taskId || event.kind !== "user") return undefined;
+    try {
+      const result = await client.call(task_rewind, { taskId, userSeq: event.seq });
+      setTaskId(result.task.taskId);
+      setEvents(result.events);
+      setRunning(false);
+      setConversationKey((value) => value + 1);
+      await refreshTasks();
+      return result.draft;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return undefined;
     }
   }
 
@@ -495,7 +552,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   </div>;
 
   const slots: Partial<Record<Panel, React.ReactNode>> = {
-    chat: <ChatPanel key={conversationKey} events={events} running={running} attachments={attachments} attachmentBusy={attachmentBusy}
+    chat: <ChatPanel key={conversationKey} events={events} running={running} attachments={attachments} attachmentBusy={attachmentBusy} onRewind={rewindChat}
       onChooseAttachments={() => void chooseAttachments()} onFiles={(files) => void stageFiles(files)} onRemoveAttachment={(id) => setAttachments((current) => current.filter((attachment) => attachment.attachmentId !== id))}
       onBeforeSend={approveRemoteAttachmentSend} onSend={(text) => void send(text)} onStop={() => void stop()} onRespondApproval={(approvalId, approved) => {
       if (!taskId) return;
@@ -509,8 +566,11 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       onOpenUrl={(url) => { setAuthBrowserError(undefined); void Promise.resolve(invoke<string>("open_external_url", { url })).catch((cause) => setAuthBrowserError(`Browser did not open: ${cause instanceof Error ? cause.message : String(cause)}`)); }}
       onRespond={(response) => authFlow && void client.call(provider_auth_respond, { flowId: authFlow.flowId, response }).then(() => client.call(provider_auth_get, { flowId: authFlow.flowId })).then((result) => setAuthFlow(result.flow))}
       onCancel={() => { if (authFlow) void client.call(provider_auth_cancel, { flowId: authFlow.flowId }); setAuthOpen(false); setAuthFlow(undefined); }} /> : undefined} />,
-    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : homeDirectory)} theme={theme} />,
-    fileTree: workspaceRoot ? <div className="file-summary"><span className="empty-kicker">Workspace</span><strong>{workspaceRoot}</strong>{openFile && <button type="button" onClick={() => void openInEditor(editorEngine, openFile)}>{openFile.slice(workspaceRoot.length + 1)}</button>}</div> : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
+    editor: <VscodiumEditor directory={workspaceRoot ?? (openFile ? openFile.slice(0, Math.max(1, openFile.lastIndexOf("/"))) : homeDirectory)} file={openFile} theme={theme} />,
+    fileTree: workspaceRoot ? <FileExplorer root={workspaceRoot} activeFile={openFile}
+      listDirectory={listWorkspaceDirectory}
+      onOpenFile={(path) => void openInEditor(editorEngine, path)} />
+      : <EmptyPanel title="Files" detail="Open a folder to browse its contents." action="Open folder" onAction={() => void startAction("open-folder")} />,
     taskHistory: <TaskHistory tasks={tasks.filter((task) => task.title.toLowerCase().includes(taskQuery.trim().toLowerCase()))} state={tasks.length ? "ready" : "empty"} query={taskQuery} onQueryChange={setTaskQuery} onOpen={(id) => void openTask(id)} onDelete={(id) => void deleteChat(id)} />,
     terminal: <EmbeddedTerminal directory={workspaceRoot} launch={terminalLaunch} />,
     problems: <EmptyPanel title="Problems" detail="Diagnostics for the active file appear here." />,
@@ -561,10 +621,15 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
       {view === "start" && <main className="start-stage"><StartSurface recents={tasks.map((task) => ({ id: task.taskId, label: task.title, kind: "task" }))} state={tasks.length ? "ready" : "empty"} onAction={(action) => void startAction(action)} onOpenRecent={(id) => void openTask(id)} /></main>}
       {view === "workspace" && <main className="workspace-stage"><WorkspaceShell layout={layout} activePanel={activePanel} slots={slots} onToggle={toggleSurface} onPreset={(preset: Preset) => setLayout(applyPreset(preset, activePanel))} onReset={() => setLayout(resetLayout())} onSettings={() => setSettingsTab("appearance")} /></main>}
     </div>
-    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli}
+    {settingsTab && <SettingsPanel tab={settingsTab} theme={theme} editorEngine={editorEngine} connections={connections} providerState={providerState} providerError={providerError} authProviders={authProviders} geminiCli={geminiCli} usage={usage}
+      mcpServers={mcpServers} mcpConfigPath={mcpConfigPath} mcpBusyId={mcpBusyId} mcpError={mcpError}
       onTab={setSettingsTab} onTheme={setTheme} onEditorEngine={setEditorEngine} onClose={() => setSettingsTab(undefined)} onAddConnection={(form) => void addConnection(form)}
       onRemoveConnection={(id) => void removeConnection(id)} onSetConnectionEnabled={(id, enabled) => void setConnectionEnabled(id, enabled)}
-      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} onClaudeCodeLogin={startClaudeCodeLogin} />}
+      onCheckConnection={(id) => void checkConnection(id)} onAuthenticate={(provider, method) => void authenticateProvider(provider, method)} onGeminiCliLogin={startGeminiCliLogin} onClaudeCodeLogin={startClaudeCodeLogin}
+      onMcpUpsert={(server: McpServerConfig) => void updateMcp(() => client.call(mcp_server_upsert, server))}
+      onMcpImport={(json) => void updateMcp(() => client.call(mcp_server_import, { json }))}
+      onMcpSetEnabled={(id, enabled) => void updateMcp(() => client.call(mcp_server_set_enabled, { id, enabled }))}
+      onMcpTest={(id) => void testMcp(id)} onMcpRemove={(id) => void updateMcp(() => client.call(mcp_server_remove, { id }))} />}
   </div>;
 }
 

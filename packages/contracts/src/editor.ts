@@ -29,6 +29,22 @@ export const FileState = z.object({
 });
 export type FileState = z.infer<typeof FileState>;
 
+export const WorkspaceEntry = z.object({
+  name: z.string(),
+  path: z.string(),
+  kind: z.enum(["file", "directory", "symlink"]),
+});
+export type WorkspaceEntry = z.infer<typeof WorkspaceEntry>;
+
+export const fs_list_directory = defineOperation({
+  name: "fs_list_directory",
+  schemaVersion: 1,
+  summary: "List one workspace directory for the lazy desktop Explorer.",
+  consequential: false,
+  request: z.object({ path: z.string().min(1) }),
+  response: z.object({ path: z.string(), entries: z.array(WorkspaceEntry) }),
+});
+
 export const fs_read_file = defineOperation({
   name: "fs_read_file",
   schemaVersion: 1,

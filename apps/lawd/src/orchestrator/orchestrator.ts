@@ -33,6 +33,7 @@ export interface OrchestratorDeps {
   allowedTools?: string[];
   now?: () => Date;
   attachments?: { resolve(ids: string[]): ResolvedAttachment[] };
+  orchestrationGuide?: string;
 }
 
 interface RunHandle {
@@ -91,6 +92,40 @@ export class Orchestrator {
     return { deleted: this.deps.store.deleteTask(taskId) };
   }
 
+  rewindTask(taskId: string, userSeq: number): { task: Task; events: ChatEvent[]; draft: string } {
+    const source = this.requireTask(taskId);
+    if (this.running.has(taskId)) {
+      throw Object.assign(new Error("Stop this chat before rewinding it."), { code: "TASK_ACTIVE" });
+    }
+    const sourceEvents = this.deps.store.getEvents(taskId, 0);
+    const pivot = sourceEvents.find((event) => event.seq === userSeq && event.kind === "user");
+    if (!pivot?.text) throw Object.assign(new Error("That prompt is no longer available to rewind."), { code: "NOT_FOUND" });
+
+    const prior = sourceEvents.filter((event) => event.seq < userSeq);
+    const contextSeed = conversationSeed(prior);
+    const at = this.now().toISOString();
+    const task: Task = {
+      taskId: this.id("task"),
+      title: `${source.title} · rewind`,
+      status: "active",
+      createdAt: at,
+      updatedAt: at,
+      ...(source.workspaceId ? { workspaceId: source.workspaceId } : {}),
+      ...(source.defaultIdentity ? { defaultIdentity: source.defaultIdentity } : {}),
+      ...(contextSeed ? { contextSeed } : {}),
+    };
+    this.deps.store.createTask(task);
+    for (const event of prior) {
+      this.deps.store.appendEvent(task.taskId, {
+        ...event,
+        id: this.id("evt"),
+        taskId: task.taskId,
+        phaseId: undefined,
+      });
+    }
+    return { task, events: this.deps.store.getEvents(task.taskId, 0), draft: pivot.text };
+  }
+
   getTask(taskId: string): { task: Task; phases: Phase[] } {
     const task = this.requireTask(taskId);
     return { task, phases: this.deps.store.getPhases(taskId) };
@@ -103,6 +138,33 @@ export class Orchestrator {
       nextSeq: this.deps.store.nextSeq(taskId),
       taskStatus: task.status,
     };
+  }
+
+  usageSummary(): { measuredSince?: string; providers: Array<{ provider: string; input: number; output: number; total: number; models: Array<{ model: string; input: number; output: number; total: number }> }> } {
+    const tasks = this.deps.store.listTasks("");
+    const totals = new Map<string, Map<string, { input: number; output: number }>>();
+    for (const task of tasks) {
+      const phases = new Map(this.deps.store.getPhases(task.taskId).map((phase) => [phase.phaseId, phase.identity]));
+      for (const event of this.deps.store.getEvents(task.taskId, 0)) {
+        const usage = event.data?.usage as { input?: unknown; output?: unknown } | undefined;
+        const identity = event.phaseId ? phases.get(event.phaseId) : undefined;
+        if (!usage || !identity) continue;
+        const input = typeof usage.input === "number" ? usage.input : 0;
+        const output = typeof usage.output === "number" ? usage.output : 0;
+        const models = totals.get(identity.provider) ?? new Map<string, { input: number; output: number }>();
+        const current = models.get(identity.model) ?? { input: 0, output: 0 };
+        current.input += input; current.output += output;
+        models.set(identity.model, current); totals.set(identity.provider, models);
+      }
+    }
+    const providers = [...totals.entries()].map(([provider, modelTotals]) => {
+      const models = [...modelTotals.entries()].map(([model, usage]) => ({ model, ...usage, total: usage.input + usage.output })).sort((a, b) => b.total - a.total);
+      const input = models.reduce((sum, model) => sum + model.input, 0);
+      const output = models.reduce((sum, model) => sum + model.output, 0);
+      return { provider, input, output, total: input + output, models };
+    }).sort((a, b) => b.total - a.total);
+    const measuredSince = tasks.map((task) => task.createdAt).sort().at(0);
+    return { ...(measuredSince ? { measuredSince } : {}), providers };
   }
 
   private requireTask(taskId: string): Task {
@@ -186,7 +248,13 @@ export class Orchestrator {
     });
 
     const controller = new AbortController();
-    const promise = this.execPhase(task, phase, phasePrompt, controller, attachments);
+    let executionPrompt = task.contextSeed && this.deps.store.getPhases(task.taskId).length === 1
+      ? `${task.contextSeed}\n\nContinue from that conversation with this new user message:\n${phasePrompt}`
+      : phasePrompt;
+    if (this.deps.orchestrationGuide && requestsModelOrchestration(phasePrompt)) {
+      executionPrompt = `${this.deps.orchestrationGuide}\n\nCurrent coordinating Aster phase mode: ${identity.mode ?? "manual"}. Apply the Aster orchestration skill above to this user request:\n${executionPrompt}`;
+    }
+    const promise = this.execPhase(task, phase, executionPrompt, controller, attachments);
     this.running.set(task.taskId, { controller, promise, acknowledgedCancel: false });
 
     return { accepted: true, interpretation: parsed.interpretation, phaseId: phase.phaseId, status: "running", nextSeq: this.deps.store.nextSeq(task.taskId) };
@@ -328,4 +396,21 @@ export class Orchestrator {
   async idle(taskId: string): Promise<void> {
     await this.running.get(taskId)?.promise.catch(() => {});
   }
+}
+
+function conversationSeed(events: ChatEvent[]): string {
+  const lines = events
+    .filter((event) => event.kind === "user" || event.kind === "assistant")
+    .map((event) => `${event.kind === "user" ? "User" : "Assistant"}: ${event.text ?? ""}`);
+  if (!lines.length) return "";
+  const transcript = lines.join("\n\n");
+  const bounded = transcript.length > 48_000 ? transcript.slice(-48_000) : transcript;
+  return `Conversation context from before a user-requested rewind:\n${bounded}`;
+}
+
+function requestsModelOrchestration(prompt: string): boolean {
+  if (/do not delegate further/i.test(prompt)) return false;
+  const action = /\b(delegate|hand off|ask|call|review|audit|verify|then|orchestrat)/i.test(prompt);
+  const target = /\b(claude|openai|chatgpt|codex|gemini|antigravity|ollama|qwen|model|provider)\b/i.test(prompt);
+  return action && target;
 }
