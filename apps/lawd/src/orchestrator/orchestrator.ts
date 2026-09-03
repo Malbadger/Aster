@@ -191,7 +191,7 @@ export class Orchestrator {
     reason?: string;
     nextSeq: number;
   } {
-    const task = this.requireTask(input.taskId);
+    let task = this.requireTask(input.taskId);
     const parsed = interpret(input.text);
     const piControl = parsed.command && ["clear", "compact", "session", "stats", "name", "auto-compact", "auto-retry"].includes(parsed.command);
     const phasePrompt = piControl || parsed.interpretation.type === "unknown-command" ? input.text.trim() : parsed.prompt || input.text;
@@ -229,6 +229,14 @@ export class Orchestrator {
       return { accepted: false, interpretation: parsed.interpretation, status: "pending", reason: "no model selected", nextSeq: this.deps.store.nextSeq(task.taskId) };
     }
 
+    // An explicit composer selection becomes this chat's durable coordinating
+    // identity. Provider defaults are resolved only by delegated work and must
+    // never overwrite the active chat model.
+    if (input.identity && JSON.stringify(task.defaultIdentity) !== JSON.stringify(input.identity)) {
+      task = { ...task, defaultIdentity: input.identity, updatedAt: this.now().toISOString() };
+      this.deps.store.updateTask(task);
+    }
+
     const phase: Phase = {
       phaseId: this.id("phase"),
       taskId: task.taskId,
@@ -252,7 +260,7 @@ export class Orchestrator {
       ? `${task.contextSeed}\n\nContinue from that conversation with this new user message:\n${phasePrompt}`
       : phasePrompt;
     if (this.deps.orchestrationGuide && requestsModelOrchestration(phasePrompt)) {
-      executionPrompt = `${this.deps.orchestrationGuide}\n\nCurrent coordinating Aster phase mode: ${identity.mode ?? "manual"}. Apply the Aster orchestration skill above to this user request:\n${executionPrompt}`;
+      executionPrompt = `${this.deps.orchestrationGuide}\n\nCurrent coordinating Aster model: ${identity.model}. Current coordinating provider: ${identity.provider}. Current coordinating Aster phase mode: ${identity.mode ?? "manual"}. Use this exact model ID as caller_model; provider defaults apply only to delegated targets with no explicit model. Apply the Aster orchestration skill above to this user request:\n${executionPrompt}`;
     }
     const promise = this.execPhase(task, phase, executionPrompt, controller, attachments);
     this.running.set(task.taskId, { controller, promise, acknowledgedCancel: false });

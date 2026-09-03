@@ -3,7 +3,7 @@ import { open as openNativePath, save as saveNativePath } from "@tauri-apps/plug
 import { invoke } from "@tauri-apps/api/core";
 import {
   DESKTOP_VERSION, daemon_get_health, daemon_probe_capabilities,
-  model_list_catalog, model_set_favorite, model_set_provider_default, task_cancel, task_create,
+  model_list_catalog, model_set_favorite, model_set_provider_default, task_cancel, task_create, task_get,
   task_get_events, task_list, task_send_message, task_delete, task_rewind, task_respond_approval,
   usage_get_summary,
   fs_list_directory, fs_read_file, fs_write_file, verify_run,
@@ -44,6 +44,7 @@ const THEME_KEY = "law.desktop.theme.v1";
 const EDITOR_KEY = "law.desktop.editor.v1";
 const MODE_KEY = "aster.desktop.mode.v1";
 const WORKSPACE_KEY = "aster.desktop.workspace.v1";
+const ACTIVE_MODEL_KEY = "aster.desktop.active-model.v1";
 const defaultClient = createIpcClient(tauriTransport);
 
 function loadLayout(): Layout {
@@ -76,7 +77,7 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const [favorites, setFavorites] = React.useState<string[]>([]);
   const [providerDefaults, setProviderDefaults] = React.useState<Record<string, string>>({});
   const [query, setQuery] = React.useState("");
-  const [selectedId, setSelectedId] = React.useState<string>();
+  const [selectedId, setSelectedId] = React.useState<string | undefined>(() => localStorage.getItem(ACTIVE_MODEL_KEY) ?? undefined);
   const [effort, setEffort] = React.useState<EffortLevel>("medium");
   const [mode, setMode] = React.useState<ExecutionMode>(() => (localStorage.getItem(MODE_KEY) as ExecutionMode | null) ?? "manual");
   const [tasks, setTasks] = React.useState<Task[]>([]);
@@ -124,8 +125,12 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   const refreshCatalog = React.useCallback(async (search = "") => {
     const catalog = await client.call(model_list_catalog, { query: search });
     setModels(catalog.models); setFavorites(catalog.favorites); setProviderDefaults(catalog.defaults);
-    setSelectedId((current) => current && catalog.models.some((model) => model.id === current)
-      ? current : catalog.models.find((model) => model.availability === "available")?.id);
+    setSelectedId((current) => {
+      if (current && catalog.models.some((model) => model.id === current)) return current;
+      const saved = localStorage.getItem(ACTIVE_MODEL_KEY);
+      if (saved && catalog.models.some((model) => model.id === saved)) return saved;
+      return catalog.models.find((model) => model.availability === "available")?.id;
+    });
   }, [client]);
 
   const setProviderDefault = React.useCallback(async (provider: string, modelId?: string) => {
@@ -232,6 +237,9 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   React.useEffect(() => { localStorage.setItem(EDITOR_KEY, editorEngine); }, [editorEngine]);
   React.useEffect(() => { localStorage.setItem(MODE_KEY, mode); }, [mode]);
   React.useEffect(() => {
+    if (selectedId) localStorage.setItem(ACTIVE_MODEL_KEY, selectedId);
+  }, [selectedId]);
+  React.useEffect(() => {
     if (settingsTab !== "usage") return;
     void client.call(usage_get_summary, {}).then(setUsage).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, [client, settingsTab]);
@@ -264,7 +272,16 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
 
   async function openTask(id: string): Promise<void> {
     setError(undefined); setTaskId(id);
-    const result = await client.call(task_get_events, { taskId: id, sinceSeq: 0 });
+    const [result, detail] = await Promise.all([
+      client.call(task_get_events, { taskId: id, sinceSeq: 0 }),
+      client.call(task_get, { taskId: id }),
+    ]);
+    const identity = detail.phases.at(-1)?.identity ?? detail.task.defaultIdentity;
+    if (identity) {
+      setSelectedId(identity.model);
+      setEffort(identity.effort);
+      setMode(identity.mode ?? "manual");
+    }
     setEvents(result.events); setView("workspace");
   }
 

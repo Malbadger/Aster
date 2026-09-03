@@ -53,7 +53,15 @@ export class ClaudeCodePhaseRunner implements PhaseRunner {
 
     const child = spawn(this.executable, args, {
       cwd: req.workspaceRoot,
-      env: { ...process.env, ...this.mcpEnvironment() },
+      // The MCP subprocess inherits this authoritative identity. That keeps a
+      // model-authored caller_model argument from replacing the actual active
+      // chat model with a provider default.
+      env: {
+        ...process.env,
+        ...this.mcpEnvironment(),
+        ASTER_COORDINATOR_MODEL: req.identity.model,
+        ASTER_COORDINATOR_PROVIDER: req.identity.provider,
+      },
       stdio: ["pipe", "pipe", "pipe"],
     });
     const exitPromise = new Promise<number | null>((resolve, reject) => {

@@ -15,6 +15,7 @@ import {
 } from './local-service.js';
 import { callAsterDaemon } from './daemon-client.js';
 import { delegationMarkdown, summarizeDelegation, waitForDelegation, type DelegationEventsResult } from './delegation.js';
+import { assertDelegationCaller } from './caller-identity.js';
 
 const LAW_ROOT = process.env.LAW_PROJECT_ROOT ?? fileURLToPath(new URL('../..', import.meta.url));
 const RESPONSE_LIMIT = 12_000;
@@ -58,12 +59,12 @@ async function startDelegation(input: { model?: string; provider?: string; promp
   const resolved = await callAsterDaemon<{ model: { id: string; displayName: string; provider: string; locality: 'local' | 'remote' | 'unknown'; availability: string; effort: { supported: string[] } }; source: 'explicit' | 'provider-default' }>('model_resolve_target', { ...(model ? { modelId: model } : {}), ...(provider ? { provider } : {}) });
   const target = resolved.model;
   const activeWorkspace = await resolveWorkspace(workspace);
-  if (caller_model && caller_model === target.id) throw new Error('Refused recursive delegation to the calling model. Choose a different model.');
+  const effectiveCaller = assertDelegationCaller(target.id, caller_model);
   if (!target.effort.supported.includes(effort)) throw new Error(`Model "${target.id}" does not support effort "${effort}". Supported: ${target.effort.supported.join(', ')}.`);
   const identity = { provider: target.provider, model: target.id, effort, mode, locality: target.locality };
   const created = await callAsterDaemon<{ task: { taskId: string } }>('task_create', { title: `Delegated · ${target.displayName}`, workspaceId: activeWorkspace, defaultIdentity: identity });
   const sent = await callAsterDaemon<{ status: string }>('task_send_message', { taskId: created.task.taskId, text: prompt, identity, attachmentIds: [], attachmentEgressApproved: false });
-  const output = { task_id: created.task.taskId, model: target.id, provider: target.provider, resolution: resolved.source, mode, status: sent.status };
+  const output = { task_id: created.task.taskId, model: target.id, provider: target.provider, resolution: resolved.source, caller_model: effectiveCaller ?? null, mode, status: sent.status };
   return textResult(output, response_format, `Started ${mode === 'plan' ? 'read-only ' : ''}Aster delegation **${created.task.taskId}** with **${target.id}** (${resolved.source}, mode ${mode}). Call \`aster_delegate_wait\` with this task ID.`);
 }
 

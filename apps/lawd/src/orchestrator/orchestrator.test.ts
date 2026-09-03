@@ -76,6 +76,17 @@ describe("Orchestrator", () => {
     expect(assistant?.data?.identity).toEqual(IDENTITY);
   });
 
+  it("persists an explicitly selected coordinator without consulting provider defaults", async () => {
+    const { orch } = make(new ScriptedRunner());
+    const providerDefault = { provider: "anthropic", model: "anthropic:claude-opus-4-8", effort: "medium", mode: "full-access" } as const;
+    const active = { ...providerDefault, model: "anthropic:claude-opus-5" };
+    const { task } = orch.createTask({ title: "coordinator", defaultIdentity: providerDefault });
+    orch.sendMessage({ taskId: task.taskId, text: "orchestrate", identity: active });
+    await orch.idle(task.taskId);
+    expect(orch.getTask(task.taskId).task.defaultIdentity).toEqual(active);
+    expect(orch.getTask(task.taskId).phases[0]?.identity).toEqual(active);
+  });
+
   it("denies a tool that is not on the allowlist (gate enforced before effect)", async () => {
     const { orch } = make(new ScriptedRunner("exec_shell", { cmd: "rm -rf /" }));
     const { task } = orch.createTask({ title: "chat", defaultIdentity: IDENTITY });

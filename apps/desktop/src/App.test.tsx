@@ -10,6 +10,8 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 
 const ollamaModel: ModelDescriptor = { id: "ollama:qwen", displayName: "Qwen:latest", provider: "ollama", locality: "local", availability: "available", effort: { supported: ["low", "medium", "high"] }, capabilities: { tools: true, vision: false } };
 const remoteModel: ModelDescriptor = { id: "openai-codex:gpt-test", displayName: "GPT Test", provider: "openai-codex", locality: "remote", availability: "available", effort: { supported: ["low", "medium", "high", "max"] }, capabilities: { tools: true, vision: false } };
+const opus48: ModelDescriptor = { ...remoteModel, id: "anthropic:claude-opus-4-8", displayName: "Claude Opus 4.8", provider: "anthropic" };
+const opus5: ModelDescriptor = { ...remoteModel, id: "anthropic:claude-opus-5", displayName: "Claude Opus 5", provider: "anthropic" };
 
 function client(models: ModelDescriptor[] = [ollamaModel]): IpcClient {
   return {
@@ -62,6 +64,34 @@ describe("App", () => {
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0]).toEqual(expect.objectContaining({ identity: expect.objectContaining({ mode: "full-access", model: remoteModel.id }) }));
     confirm.mockRestore();
+  });
+
+  it("keeps the selected coordinator distinct from its provider default", async () => {
+    localStorage.removeItem("aster.desktop.active-model.v1");
+    const calls: Array<{ op: string; payload: unknown }> = [];
+    const base = client([opus48, opus5]);
+    const identityClient = {
+      call: async (op: { name: string }, payload: unknown) => {
+        calls.push({ op: op.name, payload });
+        if (op.name === "model_list_catalog") return { models: [opus48, opus5], favorites: [], recent: [], defaults: { anthropic: opus48.id } };
+        if (op.name === "task_create") return { task: { taskId: "task-opus", title: "New chat", status: "active", createdAt: "", updatedAt: "" } };
+        if (op.name === "task_send_message") return { accepted: true, interpretation: { type: "natural-language", summary: "chat" }, status: "completed", nextSeq: 0 };
+        if (op.name === "task_get_events") return { events: [], nextSeq: 0, taskStatus: "completed" };
+        return base.call(op as never, payload as never);
+      },
+    } as IpcClient;
+    render(<App client={identityClient} />);
+    const box = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.click(screen.getByRole("button", { name: /Claude Opus 4\.8/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Claude Opus 5/ }));
+    fireEvent.change(box, { target: { value: "coordinate this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(calls.some(({ op }) => op === "task_send_message")).toBe(true));
+    const created = calls.find(({ op }) => op === "task_create")?.payload as { defaultIdentity: { model: string } };
+    const sent = calls.find(({ op }) => op === "task_send_message")?.payload as { identity: { model: string } };
+    expect(created.defaultIdentity.model).toBe(opus5.id);
+    expect(sent.identity.model).toBe(opus5.id);
+    expect(created.defaultIdentity.model).not.toBe(opus48.id);
   });
 
   it("keeps the default native client stable across boot state updates", async () => {

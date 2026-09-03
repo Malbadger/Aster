@@ -79,6 +79,23 @@ describe("ClaudeCodePhaseRunner", () => {
     expect(args).toEqual(expect.arrayContaining(["--allowedTools", "mcp__law-ollama__aster_list_models,mcp__law-ollama__aster_delegate_start,mcp__law-ollama__aster_delegate_get,mcp__law-ollama__aster_delegate_wait"]));
   });
 
+  it("passes the exact active chat identity to the inherited MCP environment", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aster-claude-code-identity-"));
+    const envLog = join(dir, "env.json"); const executable = join(dir, "claude");
+    writeFileSync(executable, `#!/usr/bin/env node
+      require('node:fs').writeFileSync(${JSON.stringify(envLog)}, JSON.stringify({model: process.env.ASTER_COORDINATOR_MODEL, provider: process.env.ASTER_COORDINATOR_PROVIDER}));
+      console.log(JSON.stringify({type:'system', subtype:'init'}));
+      console.log(JSON.stringify({type:'result', is_error:false, result:'ok', usage:{input_tokens:1, output_tokens:1}}));
+    `); chmodSync(executable, 0o755);
+    const req = request("identity", "Use aster_delegate_start");
+    req.identity.model = "anthropic:claude-opus-5";
+    await collect(new ClaudeCodePhaseRunner(executable), req);
+    expect(JSON.parse(readFileSync(envLog, "utf8"))).toEqual({
+      model: "anthropic:claude-opus-5",
+      provider: "anthropic",
+    });
+  });
+
   it("pre-authorizes mutating delegation only in Auto or Full access", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aster-claude-code-mutating-tools-"));
     const argvLog = join(dir, "argv.json"); const executable = join(dir, "claude");
