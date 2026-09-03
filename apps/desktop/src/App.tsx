@@ -511,8 +511,13 @@ export function App({ client = defaultClient }: AppProps): React.JSX.Element {
   function startGeminiCliLogin(): void {
     if (!geminiCli?.antigravityInstalled) {
       setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));
-      setError("Google moved personal Gemini CLI accounts to Antigravity CLI. The official installation guide has been opened; install it, then return to Providers and choose Sign in.");
-      void Promise.resolve(invoke<string>("open_external_url", { url: "https://antigravity.google/docs/cli/install/" })).catch(() => {});
+      setError("The official Google Antigravity SDK is not installed in this Aster runtime. The SDK installation guide has been opened.");
+      void Promise.resolve(invoke<string>("open_external_url", { url: "https://www.antigravity.google/docs/sdk/overview" })).catch(() => {});
+      return;
+    }
+    if (!geminiCli.gcloudInstalled) {
+      setError("Google Cloud CLI is required for browser-backed ADC OAuth. Its official installation guide has been opened; API-key authentication remains available without gcloud.");
+      void Promise.resolve(invoke<string>("open_external_url", { url: "https://cloud.google.com/sdk/docs/install" })).catch(() => {});
       return;
     }
     setSettingsTab(undefined); setView("workspace"); setActivePanel("chat"); setLayout((old) => ({ ...old, chat: true }));

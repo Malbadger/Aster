@@ -36,8 +36,8 @@ describe("SettingsPanel", () => {
   });
 
   it("keeps measured token usage in its own settings page", () => {
-    render(<SettingsPanel {...base} tab="usage" usage={{ measuredSince: "2026-01-01T00:00:00.000Z", providers: [{ provider: "anthropic", input: 1200, output: 300, total: 1500, models: [{ model: "claude-sonnet", input: 1200, output: 300, total: 1500 }] }] }} />);
-    expect(screen.getByText("Token usage")).toBeInTheDocument();
+    render(<SettingsPanel {...base} tab="usage" usage={{ measuredSince: "2026-01-01T00:00:00.000Z", providers: [{ provider: "anthropic", input: 1200, output: 300, total: 1500, turns: 1, models: [{ model: "claude-sonnet", input: 1200, output: 300, total: 1500, turns: 1 }] }] }} />);
+    expect(screen.getByText("Token processing")).toBeInTheDocument();
     expect(screen.getByText("Claude Code")).toBeInTheDocument();
     expect(screen.getAllByText("1.5K tokens")).toHaveLength(2);
     expect(screen.getByText("claude-sonnet")).toBeInTheDocument();

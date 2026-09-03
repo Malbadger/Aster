@@ -34,7 +34,10 @@ export const ModelDescriptor = z.object({
   effort: z.object({ supported: z.array(EffortLevel) }),
   /** Coarse capability flags for filtering/among secondary metadata. */
   capabilities: z.object({
+    /** True when the model can use tools through Aster, regardless of transport. */
     tools: z.boolean().default(false),
+    /** Distinguishes provider-native tool calls from Aster/Pi mediation. */
+    toolAccess: z.enum(["native", "harness-mediated", "none"]).optional(),
     vision: z.boolean().default(false),
   }),
   /** Disambiguating secondary label when display names collide (RULE-D-001). */

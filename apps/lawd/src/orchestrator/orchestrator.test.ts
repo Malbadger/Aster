@@ -228,6 +228,6 @@ describe("Orchestrator", () => {
     const { orch } = make(runner);
     const task = orch.createTask({ title: "usage", defaultIdentity: IDENTITY }).task;
     orch.sendMessage({ taskId: task.taskId, text: "measure" }); await orch.idle(task.taskId);
-    expect(orch.usageSummary().providers).toEqual([{ provider: "ollama", input: 120, output: 30, total: 150, models: [{ model: "llama3.1:8b", input: 120, output: 30, total: 150 }] }]);
+    expect(orch.usageSummary().providers).toEqual([{ provider: "ollama", input: 120, output: 30, total: 150, turns: 1, models: [{ model: "llama3.1:8b", input: 120, output: 30, total: 150, turns: 1 }] }]);
   });
 });

@@ -75,32 +75,40 @@ export class GeminiCliPhaseRunner implements PhaseRunner {
   }
 }
 
-/** Runs Google's supported Antigravity CLI for individual Google accounts. */
-export class AntigravityPhaseRunner implements PhaseRunner {
-  private readonly conversations = new Map<string, string>();
-  constructor(private readonly executable = 'agy') {}
+/** Runs Google's official Apache-2.0 Antigravity SDK through Aster's bridge. */
+export class AntigravitySdkPhaseRunner implements PhaseRunner {
+  constructor(
+    private readonly bridgePath: string,
+    private readonly dataRoot: string,
+    private readonly pythonPath = 'python3',
+    private readonly pythonModulePath?: string,
+  ) {}
 
   async *run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
-    const selected = req.identity.model.startsWith('antigravity:') ? req.identity.model.slice('antigravity:'.length) : req.identity.model;
-    const args = ['-p', promptWithAttachments(req, true), '--output-format', 'stream-json'];
-    if (selected && selected !== 'auto') args.push('--model', selected);
-    // Antigravity's concrete catalog IDs already encode effort (for example
-    // gemini-3.6-flash-low). Passing --effort as well is rejected by the CLI.
-    if (!selected || selected === 'auto' || !modelEncodesEffort(selected)) args.push('--effort', normalizeEffort(req.identity.effort));
-    const prior = this.conversations.get(req.taskId);
-    if (prior) args.push('--conversation', prior);
-    const mode = req.identity.mode ?? 'manual';
-    if (mode === 'plan') args.push('--mode=plan');
-    if (mode === 'auto') args.push('--mode=accept-edits');
-    if (mode === 'full-access') args.push('--mode=accept-edits', '--dangerously-skip-permissions');
-
-    const child = spawn(this.executable, args, { cwd: req.workspaceRoot, env: { ...process.env }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(this.pythonPath, [this.bridgePath, 'run'], {
+      cwd: req.workspaceRoot,
+      env: {
+        ...process.env,
+        ...(this.pythonModulePath ? { PYTHONPATH: [this.pythonModulePath, process.env.PYTHONPATH].filter(Boolean).join(':') } : {}),
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     const exitPromise = new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('close', resolve); });
     const onAbort = () => child.kill('SIGTERM');
     req.signal.addEventListener('abort', onAbort, { once: true });
     let assistant = '';
     let stderr = '';
     let fatal: string | undefined;
+    child.stdin.end(JSON.stringify({
+      taskId: req.taskId,
+      provider: req.identity.provider,
+      model: req.identity.model,
+      effort: req.identity.effort,
+      mode: req.identity.mode ?? (req.allowMutation ? 'auto' : 'plan'),
+      prompt: promptWithAttachments(req, true),
+      workspaceRoot: req.workspaceRoot,
+      dataRoot: this.dataRoot,
+    }));
     child.stderr.on('data', (chunk) => { stderr = `${stderr}${String(chunk)}`.slice(-8_000); });
     const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
     try {
@@ -108,42 +116,21 @@ export class AntigravityPhaseRunner implements PhaseRunner {
         if (!line.trim()) continue;
         let event: Record<string, any>;
         try { event = JSON.parse(line) as Record<string, any>; } catch { continue; }
-        // Current Antigravity JSONL wraps payloads under their event name;
-        // accept the older flat shape as well so upgrades remain compatible.
-        const eventType = event.event ?? event.type;
-        const step = event.step_update ?? event;
-        const result = event.result ?? event;
-        const conversationId = event.conversation_id ?? event.conversationId ?? event.init?.conversation_id ?? step.conversation_id ?? result.conversation_id;
-        if (typeof conversationId === 'string') this.conversations.set(req.taskId, conversationId);
-        if (eventType === 'step_update' && step.step_type === 'agent_response') assistant += String(step.text_delta ?? step.text ?? '');
-        if (eventType === 'step_update' && step.step_type === 'tool_call') yield { kind: 'tool_call', tool: String(step.tool_name ?? step.name ?? 'antigravity-tool'), input: step.parameters ?? step.input, callId: String(step.tool_call_id ?? step.id ?? '') };
-        if (eventType === 'step_update' && step.step_type === 'tool_result') yield { kind: 'tool_result', tool: String(step.tool_name ?? 'antigravity-tool'), ok: !step.error, summary: String(step.output ?? step.error ?? ''), callId: String(step.tool_call_id ?? step.id ?? '') };
-        if (eventType === 'result' && String(result.status).toLowerCase() === 'error') fatal = errorMessage(result.error) ?? String(result.message ?? 'Antigravity CLI run failed');
-        if (eventType === 'result' && !assistant && typeof result.response === 'string') assistant = result.response;
+        if (event.kind === 'assistant_delta') assistant += String(event.text ?? '');
+        if (event.kind === 'tool_call') yield { kind: 'tool_call', tool: String(event.tool ?? 'antigravity-tool'), input: event.input, callId: String(event.callId ?? '') };
+        if (event.kind === 'tool_result') yield { kind: 'tool_result', tool: String(event.tool ?? 'antigravity-tool'), ok: Boolean(event.ok), summary: String(event.summary ?? ''), callId: String(event.callId ?? '') };
+        if (event.kind === 'usage') yield { kind: 'usage', input: Number(event.input ?? 0), output: Number(event.output ?? 0) };
+        if (event.kind === 'error') fatal = String(event.message ?? 'Antigravity SDK run failed');
       }
       const exit = await exitPromise;
       if (req.signal.aborted) return;
       if (assistant.trim()) yield { kind: 'assistant', text: assistant.trim() };
-      if (fatal || exit !== 0) { yield { kind: 'error', message: fatal ?? (stderr.trim() || `Antigravity CLI exited with code ${exit}`) }; return; }
+      if (fatal || exit !== 0) { yield { kind: 'error', message: fatal ?? (stderr.trim() || `Antigravity SDK bridge exited with code ${exit}`) }; return; }
       yield { kind: 'settled' };
     } finally {
       req.signal.removeEventListener('abort', onAbort); lines.close();
     }
   }
-}
-
-function normalizeEffort(effort: string): 'low' | 'medium' | 'high' {
-  if (effort === 'minimal' || effort === 'low') return 'low';
-  if (effort === 'max' || effort === 'high') return 'high';
-  return 'medium';
-}
-
-function modelEncodesEffort(model: string): boolean { return /-(?:low|medium|high|xhigh|max)$/i.test(model); }
-
-function errorMessage(error: unknown): string | undefined {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message;
-  return undefined;
 }
 
 /** Routes a phase to a provider-specific runner without leaking that choice into graph state. */
@@ -157,7 +144,7 @@ export class ProviderPhaseRunner implements PhaseRunner {
   run(req: PhaseRunRequest): AsyncIterable<PhaseEvent> {
     return (
       req.identity.provider === 'gemini-cli' ? this.gemini
-      : req.identity.provider === 'antigravity' ? this.antigravity
+      : req.identity.provider.startsWith('antigravity') ? this.antigravity
       : req.identity.provider === 'anthropic' ? this.claudeCode
       : this.pi
     ).run(req);

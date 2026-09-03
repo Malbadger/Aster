@@ -44,12 +44,12 @@ describe("ProviderConnections", () => {
     expect(onSetEnabled).toHaveBeenCalledWith("c2", true);
   });
 
-  it("starts supported account and API-key authentication inside the app", () => {
+  it("starts supported account authentication and SDK credential setup inside the app", () => {
     const onAuthenticate = vi.fn();
     const onGeminiCliLogin = vi.fn();
     const onClaudeCodeLogin = vi.fn();
     render(<ProviderConnections connections={[]} state="empty" onAdd={noop} onRemove={noop} onSetEnabled={noop} onCheck={noop}
-      geminiCli={{ installed: true, configured: false, version: "0.57.0", antigravityInstalled: true }}
+      geminiCli={{ installed: true, configured: false, version: "0.57.0", antigravityInstalled: true, gcloudInstalled: true }}
       authProviders={[
         { id: "anthropic", name: "Anthropic", methods: ["oauth", "api_key"], configured: false },
         { id: "google", name: "Google", methods: ["api_key"], configured: false },
@@ -59,11 +59,11 @@ describe("ProviderConnections", () => {
     expect(onClaudeCodeLogin).toHaveBeenCalledOnce();
     fireEvent.click(within(claude).getByRole("button", { name: "API key" }));
     expect(onAuthenticate).toHaveBeenCalledWith("anthropic", "api_key");
-    const gemini = screen.getByText("Gemini").closest("article")!;
-    fireEvent.click(within(gemini).getByRole("button", { name: "Sign in" }));
+    const gemini = screen.getByText("Gemini / Antigravity SDK").closest("article")!;
+    fireEvent.click(within(gemini).getByRole("button", { name: "Google Cloud OAuth" }));
     expect(onGeminiCliLogin).toHaveBeenCalledOnce();
-    fireEvent.click(within(gemini).getByRole("button", { name: "API key" }));
-    expect(onAuthenticate).toHaveBeenCalledWith("google", "api_key");
+    fireEvent.click(within(gemini).getByRole("button", { name: "Gemini API key" }));
+    expect(screen.getByLabelText("Credential reference")).toHaveValue("GEMINI_API_KEY");
   });
 
   it("prefills a compatible service and adapts API-key headers to its protocol", () => {

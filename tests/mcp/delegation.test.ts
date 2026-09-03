@@ -12,7 +12,7 @@ describe('Aster delegation result handling', () => {
         { kind: 'assistant', text: 'Done.' },
       ],
     });
-    expect(result).toMatchObject({ status: 'completed', provider: 'ollama', model: 'ollama:qwen', mode: 'full-access', response: 'Done.', usage: { input: 90, output: 25 } });
+    expect(result).toMatchObject({ status: 'completed', provider: 'ollama', model: 'ollama:qwen', mode: 'full-access', response: 'Done.', usage: { input: 90, output: 25, turns: 2, semantics: 'cumulative-context-processed' } });
   });
 
   it('waits without external timer tools and can return a resumable timeout', async () => {

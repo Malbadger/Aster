@@ -6,7 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 
 interface TerminalOutput { sessionId: string; data: string }
 
-export type TerminalProgram = "pi" | "gemini" | "antigravity" | "claude";
+export type TerminalProgram = "pi" | "gemini" | "gcloud-adc" | "claude";
 
 export function EmbeddedTerminal({ directory, launch }: { directory?: string; launch?: { program: TerminalProgram; initialInput?: string } }): React.JSX.Element {
   const host = React.useRef<HTMLDivElement>(null);

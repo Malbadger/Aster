@@ -39,7 +39,7 @@
     "shortDescription": "Aster AI Workbench",
     "longDescription": "Aster is a Linux-first open-source desktop workbench for local and remote AI models, optional coding, provider-neutral orchestration, verification, and evidence.",
     "linux": {
-      "deb": { "depends": [] }
+      "deb": { "depends": ["python3 (>= 3.12)"] }
     }
   }
 }

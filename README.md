@@ -209,12 +209,18 @@ chats; it does not estimate subscription balances or plan limits.
   usage credits under the user's Anthropic plan.
 - **ChatGPT/OpenAI, Grok/xAI, and GitHub Copilot** use the login methods exposed
   by the installed Pi runtime.
-- **Gemini personal-account login** uses Google's supported Antigravity CLI
-  inside the Aster chat surface. If it is missing, Aster opens Google's official
-  installation guide. Complete the Google flow, choose **Done — refresh
-  models**, then select one of the concrete models Antigravity reports.
-- **Gemini API keys and enterprise Gemini CLI authentication** remain separate
-  supported paths through Pi/the legacy enterprise CLI.
+- **Gemini and Google Cloud** use Google's official Antigravity SDK. Supported
+  authentication paths are a Gemini API key, a Vertex AI Express API key, or
+  Google Cloud Application Default Credentials (ADC). Aster stores only an
+  environment-variable reference for keys; it never copies the key value into
+  its settings. The ADC browser flow also requires an active Google Cloud
+  project; Aster uses `GOOGLE_CLOUD_LOCATION` when set and otherwise follows
+  Google's documented `us-central1` example.
+- The Antigravity SDK does not expose the Antigravity consumer application's
+  personal-plan OAuth session. Aster therefore does not extract, reuse, or
+  impersonate Antigravity CLI credentials. Google Workspace administrators may
+  also prohibit the Cloud Platform scope required by ADC; use a documented API
+  key route when that policy applies.
 - **Ollama** is discovered automatically and needs no credential on loopback.
 
 To add a local server, proxy, or enterprise gateway, choose **Another service →
@@ -225,7 +231,7 @@ API-key flow, an environment-variable name, or an external secret command. The
 saved connection contains only endpoint metadata and the credential reference,
 never the resolved value.
 
-Remote authentication belongs to the provider, official Gemini CLI, or Pi;
+Remote authentication belongs to the provider, official Antigravity SDK, or Pi;
 Aster must not display or store credential values in chat or logs. CLI setup is
 also available:
 
@@ -436,9 +442,8 @@ npm run desktop:a11y
 npm run release:audit
 ```
 
-## License and release warning
+## License
 
-Package metadata declares `AGPL-3.0-only`. A public release must include and
-review the corresponding root `LICENSE` file before distribution. Until that
-gate is closed, treat this repository as pre-release source rather than a
-finalized public distribution.
+Aster is licensed under the GNU Affero General Public License v3.0 only. See
+[`LICENSE`](LICENSE). Third-party components retain their own licenses; relevant
+integration notices are recorded in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

@@ -1,12 +1,9 @@
 node_modules/
 dist/
-work/dist/
-work/upgrades/
-work/runs/
-work/independent-audit/
-work/evidence/exports/
-work/evidence/uat/
-work/evidence/
+/__pycache__/
+**/__pycache__/
+*.py[cod]
+/work/
 .law/
 *.tgz
 *.bundle

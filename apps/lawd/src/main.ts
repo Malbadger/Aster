@@ -19,7 +19,7 @@ import { SpawnCommandRunner } from "./security/command-runner.js";
 import { Orchestrator } from "./orchestrator/orchestrator.js";
 import { FileTaskStore } from "./orchestrator/task-store.js";
 import { LawCorePhaseRunner } from "./orchestrator/lawcore-runner.js";
-import { AntigravityPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./orchestrator/gemini-cli-runner.js";
+import { AntigravitySdkPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./orchestrator/gemini-cli-runner.js";
 import { ClaudeCodePhaseRunner } from "./orchestrator/claude-code-runner.js";
 import { EditorService } from "./editor/editor-service.js";
 import { nodeFs } from "./editor/node-fs.js";
@@ -63,7 +63,12 @@ async function main(): Promise<void> {
   const phaseRunner = new ProviderPhaseRunner(
     piRunner,
     new GeminiCliPhaseRunner(geminiCli.cliPath),
-    new AntigravityPhaseRunner(geminiCli.antigravityPath),
+    new AntigravitySdkPhaseRunner(
+      geminiCli.antigravityBridgePath,
+      dataRoot,
+      geminiCli.antigravityPythonPath,
+      geminiCli.antigravityModulePath,
+    ),
     new ClaudeCodePhaseRunner(undefined, mcp.claudeConfigPath, () => mcp.environment()),
   );
   const attachments = new AttachmentService(dataRoot);

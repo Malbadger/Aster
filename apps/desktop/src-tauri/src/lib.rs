@@ -62,6 +62,27 @@ fn terminate_process_group(child: &mut std::process::Child) {
     let _ = child.wait();
 }
 
+#[cfg(unix)]
+fn cleanup_stale_vscodium(data_dir: &Path) {
+    let marker = data_dir.to_string_lossy();
+    let Ok(entries) = std::fs::read_dir("/proc") else { return };
+    for entry in entries.flatten() {
+        let Ok(pid) = entry.file_name().to_string_lossy().parse::<i32>() else { continue };
+        if pid == std::process::id() as i32 { continue; }
+        let Ok(raw) = std::fs::read(entry.path().join("cmdline")) else { continue };
+        let command = String::from_utf8_lossy(&raw);
+        if !command.contains(marker.as_ref()) { continue; }
+        if !(command.contains("serve-web") || command.contains("vscodium-theme-proxy")) { continue; }
+        unsafe {
+            let group = libc::getpgid(pid);
+            if group > 0 { libc::kill(-group, libc::SIGTERM); }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+fn cleanup_stale_vscodium(_data_dir: &Path) {}
+
 fn executable_in_path(name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path).map(|dir| dir.join(name)).find(|candidate| candidate.is_file())
@@ -313,7 +334,8 @@ fn open_external_url(url: String) -> Result<String, String> {
 fn bundled_pi_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
     let resources = app.path().resource_dir().ok()?;
     let node = resources.join("runtime/node");
-    let cli = resources.join("runtime/app/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
+    let cli = daemon_runtime::packaged_app_root(app)?
+        .join("node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js");
     if !node.is_file() || !cli.is_file() { return None; }
     let mut command = CommandBuilder::new(node);
     command.arg(cli);
@@ -323,7 +345,8 @@ fn bundled_pi_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
 fn bundled_gemini_command(app: &tauri::AppHandle) -> Option<CommandBuilder> {
     let resources = app.path().resource_dir().ok()?;
     let node = resources.join("runtime/node");
-    let cli = resources.join("runtime/app/node_modules/@google/gemini-cli/bundle/gemini.js");
+    let cli = daemon_runtime::packaged_app_root(app)?
+        .join("node_modules/@google/gemini-cli/bundle/gemini.js");
     if !node.is_file() || !cli.is_file() { return None; }
     let mut command = CommandBuilder::new(node);
     command.arg(cli);
@@ -340,10 +363,12 @@ fn terminal_start(app: tauri::AppHandle, state: State<'_, TerminalState>, direct
         bundled_pi_command(&app).unwrap_or_else(|| CommandBuilder::new("pi"))
     } else if program.as_deref() == Some("gemini") {
         bundled_gemini_command(&app).unwrap_or_else(|| CommandBuilder::new("gemini"))
-    } else if program.as_deref() == Some("antigravity") {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let local = Path::new(&home).join(".local/bin/agy");
-        if local.is_file() { CommandBuilder::new(local) } else { CommandBuilder::new("agy") }
+    } else if program.as_deref() == Some("gcloud-adc") {
+        let mut gcloud = CommandBuilder::new("gcloud");
+        gcloud.arg("auth");
+        gcloud.arg("application-default");
+        gcloud.arg("login");
+        gcloud
     } else if program.as_deref() == Some("claude") {
         let home = std::env::var("HOME").unwrap_or_default();
         let local = Path::new(&home).join(".local/bin/claude");
@@ -410,6 +435,10 @@ fn ensure_vscodium(app: &tauri::AppHandle, state: &VscodiumState, directory: Opt
     };
     let data_dir = app.path().app_data_dir().map_err(|error| error.to_string())?.join("vscodium-server");
     std::fs::create_dir_all(&data_dir).map_err(|error| format!("Could not create VSCodium data directory: {error}"))?;
+    // A forced desktop exit cannot run VscodiumState::drop. Reap only prior
+    // servers carrying Aster's private data-directory marker before replacing
+    // them, so repeated launches cannot exhaust Linux inotify instances.
+    if slot.is_none() { cleanup_stale_vscodium(&data_dir); }
     let program = find_vscodium_tunnel().ok_or_else(|| "Could not find the VSCodium server executable (codium-tunnel)".to_string())?;
     prepare_vscodium_profile(app, &program, &data_dir, theme.as_deref())?;
     if let Some(server) = slot.as_mut() {

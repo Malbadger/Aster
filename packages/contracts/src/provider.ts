@@ -197,6 +197,14 @@ export const provider_gemini_cli_status = defineOperation({
     antigravityVersion: z.string().optional(),
     migrationRequired: z.boolean().optional(),
     models: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
+    sdkAuthMode: z.string().optional(),
+    supportedAuthModes: z.array(z.string()).optional(),
+    adcAvailable: z.boolean().optional(),
+    gcloudInstalled: z.boolean().optional(),
+    cloudProjectAvailable: z.boolean().optional(),
+    cloudLocationAvailable: z.boolean().optional(),
+    geminiApiKeyAvailable: z.boolean().optional(),
+    vertexExpressKeyAvailable: z.boolean().optional(),
   }),
 });
 

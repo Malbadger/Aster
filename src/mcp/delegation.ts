@@ -17,7 +17,14 @@ export interface DelegationSnapshot {
   mode?: string;
   response?: string;
   error?: string;
-  usage: { input: number; output: number };
+  usage: {
+    /** Sum of provider-reported input context processed for every model turn. */
+    input: number;
+    /** Sum of provider-reported generated tokens. */
+    output: number;
+    turns: number;
+    semantics: 'cumulative-context-processed';
+  };
   timed_out?: boolean;
 }
 
@@ -26,10 +33,12 @@ export function summarizeDelegation(taskId: string, result: DelegationEventsResu
   const error = result.events.filter((event) => event.kind === 'error').at(-1);
   const identityEvent = [...result.events].reverse().find((event) => event.data?.identity);
   const identity = identityEvent?.data?.identity as { provider?: string; model?: string; mode?: string } | undefined;
-  const usage = result.events.reduce((total, event) => {
+  const usageTotals = result.events.reduce((total, event) => {
     const item = event.data?.usage as { input?: number; output?: number } | undefined;
-    return { input: total.input + (item?.input ?? 0), output: total.output + (item?.output ?? 0) };
-  }, { input: 0, output: 0 });
+    if (!item) return total;
+    return { input: total.input + (item.input ?? 0), output: total.output + (item.output ?? 0), turns: total.turns + 1 };
+  }, { input: 0, output: 0, turns: 0 });
+  const usage = { ...usageTotals, semantics: 'cumulative-context-processed' as const };
   const emptyCompletion = result.taskStatus === 'completed' && !assistant && !error;
   return {
     task_id: taskId,
@@ -61,5 +70,5 @@ export async function waitForDelegation(
 
 export function delegationMarkdown(snapshot: DelegationSnapshot): string {
   const detail = snapshot.error ?? snapshot.response ?? (snapshot.timed_out ? 'The wait timed out; call aster_delegate_wait again with this task ID.' : 'The delegated model is still working.');
-  return `# Delegation ${snapshot.task_id}\n\n- Status: ${snapshot.status}\n- Provider: ${snapshot.provider ?? 'pending'}\n- Model: ${snapshot.model ?? 'pending'}\n- Mode: ${snapshot.mode ?? 'pending'}\n- Usage: ${snapshot.usage.input} input · ${snapshot.usage.output} output\n\n${detail}`;
+  return `# Delegation ${snapshot.task_id}\n\n- Status: ${snapshot.status}\n- Provider: ${snapshot.provider ?? 'pending'}\n- Model: ${snapshot.model ?? 'pending'}\n- Mode: ${snapshot.mode ?? 'pending'}\n- Usage: ${snapshot.usage.input} input-context tokens processed cumulatively across ${snapshot.usage.turns} model turn${snapshot.usage.turns === 1 ? '' : 's'} · ${snapshot.usage.output} generated tokens\n\n${detail}`;
 }

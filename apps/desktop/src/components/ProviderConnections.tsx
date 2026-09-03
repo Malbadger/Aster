@@ -11,7 +11,14 @@ export interface AddConnectionForm {
   endpoint?: ProviderEndpoint;
 }
 
-export interface GeminiCliStatusView { installed: boolean; configured: boolean; version?: string; authType?: string; antigravityInstalled?: boolean; antigravityConfigured?: boolean; antigravityVersion?: string; migrationRequired?: boolean; models?: Array<{ id: string; name: string }> }
+export interface GeminiCliStatusView {
+  installed: boolean; configured: boolean; version?: string; authType?: string;
+  antigravityInstalled?: boolean; antigravityConfigured?: boolean; antigravityVersion?: string;
+  migrationRequired?: boolean; models?: Array<{ id: string; name: string }>;
+  sdkAuthMode?: string; supportedAuthModes?: string[]; adcAvailable?: boolean; gcloudInstalled?: boolean;
+  cloudProjectAvailable?: boolean; cloudLocationAvailable?: boolean;
+  geminiApiKeyAvailable?: boolean; vertexExpressKeyAvailable?: boolean;
+}
 
 export interface ProviderConnectionsProps {
   connections: ProviderConnection[];
@@ -84,10 +91,15 @@ export function ProviderConnections(props: ProviderConnectionsProps): React.JSX.
         })}</div>
       </article>)}
       <article>
-        <span><strong>Gemini</strong><small>{props.geminiCli?.antigravityConfigured ? `Google account connected${props.geminiCli.antigravityVersion ? ` · Antigravity ${props.geminiCli.antigravityVersion}` : ""}` : props.geminiCli?.migrationRequired ? "Personal Gemini CLI login must migrate to Antigravity" : "Google account, enterprise login, or Gemini API key"}</small></span>
+        <span><strong>Gemini / Antigravity SDK</strong><small>{props.geminiCli?.antigravityConfigured
+          ? `${props.geminiCli.sdkAuthMode ?? "Authenticated"}${props.geminiCli.antigravityVersion ? ` · SDK ${props.geminiCli.antigravityVersion}` : ""}`
+          : props.geminiCli?.antigravityInstalled
+            ? "Choose Gemini API key, Vertex Express, or Google Cloud OAuth/ADC"
+            : "Official Google Antigravity SDK is not installed"}</small></span>
         <div className="provider-auth-actions">
-          <button type="button" onClick={props.onGeminiCliLogin}>{props.geminiCli?.antigravityInstalled ? (props.geminiCli.antigravityConfigured ? "Reconnect" : "Sign in") : "Install Antigravity"}</button>
-          <button type="button" disabled={!props.authProviders?.find((provider) => provider.id === "google")?.methods.includes("api_key")} onClick={() => props.onAuthenticate?.("google", "api_key")}>API key</button>
+          <button type="button" onClick={props.onGeminiCliLogin}>{props.geminiCli?.gcloudInstalled ? (props.geminiCli.adcAvailable ? "Refresh Cloud OAuth" : "Google Cloud OAuth") : "Install Google Cloud CLI"}</button>
+          <button type="button" onClick={() => prefill({ provider: "antigravity-gemini", label: "Antigravity SDK — Gemini API", baseUrl: "https://generativelanguage.googleapis.com", api: "google-generative-ai", authMethod: "env-var", locality: "remote", reference: "GEMINI_API_KEY", models: props.geminiCli?.models?.[0]?.id ?? "gemini-3.8-flash" })}>Gemini API key</button>
+          <button type="button" onClick={() => prefill({ provider: "antigravity-vertex", label: "Antigravity SDK — Vertex Express", baseUrl: "https://aiplatform.googleapis.com", api: "google-generative-ai", authMethod: "env-var", locality: "remote", reference: "VERTEX_API_KEY", models: props.geminiCli?.models?.[0]?.id ?? "gemini-3.8-flash" })}>Vertex Express</button>
         </div>
       </article>
       <article>

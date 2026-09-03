@@ -211,8 +211,8 @@ export const task_rewind = defineOperation({
 export const UsageSummary = z.object({
   measuredSince: z.string().optional(),
   providers: z.array(z.object({
-    provider: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative(),
-    models: z.array(z.object({ model: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative() })),
+    provider: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative(), turns: z.number().int().nonnegative(),
+    models: z.array(z.object({ model: z.string(), input: z.number().int().nonnegative(), output: z.number().int().nonnegative(), total: z.number().int().nonnegative(), turns: z.number().int().nonnegative() })),
   })),
 });
 export type UsageSummary = z.infer<typeof UsageSummary>;

@@ -1,0 +1,2 @@
+# Official Google SDK; pinned for reproducible Linux bundles.
+google-antigravity==0.1.16

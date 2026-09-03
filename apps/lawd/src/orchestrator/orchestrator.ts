@@ -140,9 +140,9 @@ export class Orchestrator {
     };
   }
 
-  usageSummary(): { measuredSince?: string; providers: Array<{ provider: string; input: number; output: number; total: number; models: Array<{ model: string; input: number; output: number; total: number }> }> } {
+  usageSummary(): { measuredSince?: string; providers: Array<{ provider: string; input: number; output: number; total: number; turns: number; models: Array<{ model: string; input: number; output: number; total: number; turns: number }> }> } {
     const tasks = this.deps.store.listTasks("");
-    const totals = new Map<string, Map<string, { input: number; output: number }>>();
+    const totals = new Map<string, Map<string, { input: number; output: number; turns: number }>>();
     for (const task of tasks) {
       const phases = new Map(this.deps.store.getPhases(task.taskId).map((phase) => [phase.phaseId, phase.identity]));
       for (const event of this.deps.store.getEvents(task.taskId, 0)) {
@@ -151,9 +151,9 @@ export class Orchestrator {
         if (!usage || !identity) continue;
         const input = typeof usage.input === "number" ? usage.input : 0;
         const output = typeof usage.output === "number" ? usage.output : 0;
-        const models = totals.get(identity.provider) ?? new Map<string, { input: number; output: number }>();
-        const current = models.get(identity.model) ?? { input: 0, output: 0 };
-        current.input += input; current.output += output;
+        const models = totals.get(identity.provider) ?? new Map<string, { input: number; output: number; turns: number }>();
+        const current = models.get(identity.model) ?? { input: 0, output: 0, turns: 0 };
+        current.input += input; current.output += output; current.turns += 1;
         models.set(identity.model, current); totals.set(identity.provider, models);
       }
     }
@@ -161,7 +161,8 @@ export class Orchestrator {
       const models = [...modelTotals.entries()].map(([model, usage]) => ({ model, ...usage, total: usage.input + usage.output })).sort((a, b) => b.total - a.total);
       const input = models.reduce((sum, model) => sum + model.input, 0);
       const output = models.reduce((sum, model) => sum + model.output, 0);
-      return { provider, input, output, total: input + output, models };
+      const turns = models.reduce((sum, model) => sum + model.turns, 0);
+      return { provider, input, output, total: input + output, turns, models };
     }).sort((a, b) => b.total - a.total);
     const measuredSince = tasks.map((task) => task.createdAt).sort().at(0);
     return { ...(measuredSince ? { measuredSince } : {}), providers };
@@ -366,7 +367,7 @@ export class Orchestrator {
         this.append(taskId, { kind: "tool_denied", taskId, phaseId, text: ev.reason, data: { tool: ev.tool, callId: ev.callId } });
         break;
       case "usage":
-        this.append(taskId, { kind: "status", taskId, phaseId, text: `usage in=${ev.input} out=${ev.output}`, data: { usage: { input: ev.input, output: ev.output } } });
+        this.append(taskId, { kind: "status", taskId, phaseId, text: `usage context=${ev.input} generated=${ev.output}`, data: { usage: { input: ev.input, output: ev.output, scope: "model-turn", semantics: "context-processed" } } });
         break;
       case "error":
         this.append(taskId, { kind: "error", taskId, phaseId, text: ev.message });

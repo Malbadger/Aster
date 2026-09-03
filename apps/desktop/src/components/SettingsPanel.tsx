@@ -113,11 +113,11 @@ function ProviderDefaults({ models, defaults, onSet }: { models: ModelDescriptor
 }
 
 function UsagePanel({ usage }: { usage?: UsageSummary }): React.JSX.Element {
-  return <section className="usage-panel"><h2>Token usage</h2><p>Tokens observed by Aster in locally retained chats. Provider plan limits are not estimated.</p>
+  return <section className="usage-panel"><h2>Token processing</h2><p>Provider-reported context processed cumulatively across model turns, plus generated output. This is not the size of the typed prompt and provider plan limits are not estimated.</p>
     {usage?.measuredSince && <small className="usage-since">Measured since {new Date(usage.measuredSince).toLocaleDateString()}</small>}
     {!usage?.providers.length ? <div className="settings-empty"><strong>No measured usage yet</strong><span>Provider totals appear after a model reports token usage.</span></div> : <div className="usage-provider-list">{usage.providers.map((provider) => <article className="usage-provider" key={provider.provider}>
-      <header><div><span>{providerName(provider.provider)}</span><strong>{formatTokens(provider.total)}</strong></div><small>{formatTokens(provider.input)} in · {formatTokens(provider.output)} out</small></header>
-      <div>{provider.models.map((model) => <div className="usage-model" key={model.model}><span>{model.model}</span><b>{formatTokens(model.total)}</b><small>{formatTokens(model.input)} in · {formatTokens(model.output)} out</small></div>)}</div>
+      <header><div><span>{providerName(provider.provider)}</span><strong>{formatTokens(provider.total)}</strong></div><small>{formatTokens(provider.input)} context processed · {formatTokens(provider.output)} generated · {provider.turns} turns</small></header>
+      <div>{provider.models.map((model) => <div className="usage-model" key={model.model}><span>{model.model}</span><b>{formatTokens(model.total)}</b><small>{formatTokens(model.input)} context · {formatTokens(model.output)} generated · {model.turns} turns</small></div>)}</div>
     </article>)}</div>}
   </section>;
 }

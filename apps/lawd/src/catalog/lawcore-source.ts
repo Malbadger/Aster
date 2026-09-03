@@ -49,8 +49,8 @@ export class LawCoreModelSource implements ModelSourcePort {
           locality: "local",
           availability: "available",
           effort: { supported: LOCAL_EFFORT },
-          capabilities: { tools: false, vision: false },
-          ...(m.parameter_size ? { note: `${m.parameter_size}${m.family ? ` · ${m.family}` : ""}` } : {}),
+          capabilities: { tools: true, toolAccess: "harness-mediated", vision: false },
+          note: [m.parameter_size ? `${m.parameter_size}${m.family ? ` · ${m.family}` : ""}` : undefined, "Tools via Aster/Pi"].filter(Boolean).join(" · "),
         });
       }
     } catch {
@@ -74,7 +74,7 @@ export class LawCoreModelSource implements ModelSourcePort {
             locality: "remote",
             availability: "available",
             effort: { supported: model.reasoning ? REMOTE_EFFORT : ["medium"] },
-            capabilities: { tools: true, vision: model.vision },
+            capabilities: { tools: true, toolAccess: "native", vision: model.vision },
           });
         }
       } catch {
@@ -84,7 +84,7 @@ export class LawCoreModelSource implements ModelSourcePort {
 
     const gemini: GeminiCliStatus = await this.geminiStatus().catch(() => ({ installed: false, configured: false }));
     if (gemini.antigravityInstalled) {
-      const discovered = gemini.models?.length ? gemini.models : [{ id: "auto", name: "Gemini (Antigravity Auto)" }];
+      const discovered = gemini.models?.length ? gemini.models : [{ id: "auto", name: "Gemini (Antigravity SDK Auto)" }];
       for (const model of discovered) out.push({
         id: `antigravity:${model.id}`,
         displayName: model.name,
@@ -92,8 +92,8 @@ export class LawCoreModelSource implements ModelSourcePort {
         locality: "remote",
         availability: gemini.antigravityConfigured ? "available" : "auth-needed",
         effort: { supported: ["low", "medium", "high"] },
-        capabilities: { tools: true, vision: true },
-        note: gemini.antigravityConfigured ? `Google Antigravity CLI${gemini.antigravityVersion ? ` ${gemini.antigravityVersion}` : ""}` : "Sign in with Google in Providers",
+        capabilities: { tools: true, toolAccess: "native", vision: true },
+        note: gemini.antigravityConfigured ? `Google Antigravity SDK${gemini.antigravityVersion ? ` ${gemini.antigravityVersion}` : ""} · ${gemini.sdkAuthMode ?? "authenticated"}` : "Configure an SDK credential in Providers",
       });
     } else if (gemini.installed) {
       out.push({
@@ -103,7 +103,7 @@ export class LawCoreModelSource implements ModelSourcePort {
         locality: "remote",
         availability: gemini.configured ? "available" : "unavailable",
         effort: { supported: ["medium"] },
-        capabilities: { tools: true, vision: true },
+        capabilities: { tools: true, toolAccess: "native", vision: true },
         note: gemini.configured ? `Gemini CLI${gemini.version ? ` ${gemini.version}` : ""}` : "Personal Google login moved to Antigravity CLI",
       });
     }

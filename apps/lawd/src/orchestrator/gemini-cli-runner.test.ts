@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AntigravityPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./gemini-cli-runner.js";
+import { AntigravitySdkPhaseRunner, GeminiCliPhaseRunner, ProviderPhaseRunner } from "./gemini-cli-runner.js";
 import type { PhaseEvent, PhaseRunRequest, PhaseRunner } from "./phase-runner.js";
 
 async function collect(runner: PhaseRunner, req: PhaseRunRequest): Promise<PhaseEvent[]> {
@@ -49,34 +49,42 @@ describe("GeminiCliPhaseRunner", () => {
     expect(invocations[0]).toContain("plan");
   });
 
-  it("runs current Antigravity JSONL without a conflicting effort flag", async () => {
+  it("runs the Antigravity SDK bridge with the selected model, effort, and mode", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aster-antigravity-runner-"));
-    const argvLog = join(dir, "argv.json");
-    const executable = join(dir, "agy");
+    const requestLog = join(dir, "request.json");
+    const executable = join(dir, "fake-python");
     writeFileSync(executable, `#!/usr/bin/env node
-      require('node:fs').writeFileSync(${JSON.stringify(argvLog)}, JSON.stringify(process.argv.slice(2)));
-      console.log(JSON.stringify({event:'init', conversation_id:'conversation-1', init:{model:'gemini-3.6-flash-low'}}));
-      console.log(JSON.stringify({event:'step_update', step_update:{conversation_id:'conversation-1', step_type:'agent_response', text_delta:'Ready.'}}));
-      console.log(JSON.stringify({event:'result', result:{conversation_id:'conversation-1', status:'SUCCESS', response:'Ready.'}}));
+      let input=''; process.stdin.on('data', c => input += c); process.stdin.on('end', () => {
+        require('node:fs').writeFileSync(${JSON.stringify(requestLog)}, input);
+        console.log(JSON.stringify({kind:'assistant_delta', text:'Ready.'}));
+        console.log(JSON.stringify({kind:'usage', input:12, output:3}));
+        console.log(JSON.stringify({kind:'settled', conversationId:'conversation-1'}));
+      });
     `);
     chmodSync(executable, 0o755);
     const req = { ...request("agy-task"), identity: { provider: "antigravity", model: "antigravity:gemini-3.6-flash-low", effort: "high", mode: "auto" } as const };
-    expect(await collect(new AntigravityPhaseRunner(executable), req)).toEqual([{ kind: "assistant", text: "Ready." }, { kind: "settled" }]);
-    const args = JSON.parse(readFileSync(argvLog, "utf8")) as string[];
-    expect(args).toEqual(expect.arrayContaining(["--model", "gemini-3.6-flash-low", "--mode=accept-edits"]));
-    expect(args).not.toContain("--effort");
+    expect(await collect(new AntigravitySdkPhaseRunner("bridge.py", dir, executable), req)).toEqual([
+      { kind: "usage", input: 12, output: 3 },
+      { kind: "assistant", text: "Ready." },
+      { kind: "settled" },
+    ]);
+    expect(JSON.parse(readFileSync(requestLog, "utf8"))).toMatchObject({
+      provider: "antigravity", model: "antigravity:gemini-3.6-flash-low", effort: "high", mode: "auto",
+    });
   });
 
   it("surfaces current Antigravity result errors instead of a generic exit code", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aster-antigravity-error-"));
-    const executable = join(dir, "agy");
+    const executable = join(dir, "fake-python");
     writeFileSync(executable, `#!/usr/bin/env node
-      console.log(JSON.stringify({event:'result', result:{status:'ERROR', error:'model conflicts with effort'}}));
-      process.exitCode = 1;
+      process.stdin.resume(); process.stdin.on('end', () => {
+        console.log(JSON.stringify({kind:'error', message:'SDK authentication missing'}));
+        process.exitCode = 1;
+      });
     `);
     chmodSync(executable, 0o755);
     const req = { ...request("agy-error"), identity: { provider: "antigravity", model: "antigravity:auto", effort: "medium" } as const };
-    expect(await collect(new AntigravityPhaseRunner(executable), req)).toEqual([{ kind: "error", message: "model conflicts with effort" }]);
+    expect(await collect(new AntigravitySdkPhaseRunner("bridge.py", dir, executable), req)).toEqual([{ kind: "error", message: "SDK authentication missing" }]);
   });
 
   it("turns CLI failures into provider-neutral error events", async () => {
