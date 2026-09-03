@@ -8,6 +8,21 @@ history, verification, and audit evidence behind one local policy boundary.
 > launch, task execution, cancellation, evidence export, and model discovery
 > have automated coverage. See [Current limitations](#current-limitations).
 
+![Aster desktop workbench](docs/images/aster-overview.png)
+
+For complete operating instructions, see the
+**[Aster User Guide](docs/USER-GUIDE.md)**.
+
+## At a glance
+
+| Unified models | Embedded development tools |
+| --- | --- |
+| ![Aster unified model selector](docs/images/aster-models.png) | ![Aster with embedded VSCodium](docs/images/aster-editor.png) |
+
+Aster keeps local and remote models in one searchable selector, while the
+workspace can expand into a theme-matched VSCodium editor and integrated
+terminal without leaving the application.
+
 ## Quick start
 
 ### Install Aster
@@ -414,8 +429,6 @@ law pi status
 The following areas are incomplete in this pre-release:
 
 - repository cloning from the Start screen;
-- a fully interactive integrated terminal;
-- recursive file-tree browsing;
 - logging settings, source control, and the complete editable-diff experience;
 - release signing and automatic updates;
 - final screen-reader, visual, usability, and public-release approval.
